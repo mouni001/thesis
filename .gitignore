@@ -1,0 +1,19 @@
+# Ignore Python cache and virtual environments
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+.env
+
+# Ignore datasets and large files
+*.csv
+*.mat
+*.pth
+
+# Ignore IDE settings
+.vscode/
+.idea/
+
+# Ignore OS files
+.DS_Store
+Thumbs.db
