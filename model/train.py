@@ -60,21 +60,30 @@ class OLD3S:
             x_S1, y_S1, x_S2, y_S2 = loadmagic()
             train = OLD3S_Shallow(x_S1, y_S1, x_S2, y_S2, 19019, 1919, 10, 30, 'parameter_magic')
             train.SecondPeriod()
-            torch.save(train.result['acc'], './data/parameter_magic/Accuracy')
-            x_vals = np.array([i for i in range(500, 500 * (len(train.result['acc']) + 1), 500)])
-            plot_reuter(np.array(train.result['acc']), x_vals,
-                        './data/parameter_magic/Accuracy_Curve.png',
-                        45000, 50000)
+            
         elif self.datasetname == 'adult':
             print('adult trainning starts')
             x_S1, y_S1, x_S2, y_S2 = loadadult()
             train = OLD3S_Shallow(x_S1, y_S1, x_S2, y_S2, 32559, 3559, 14, 30, 'parameter_adult')
             train.SecondPeriod()
-            torch.save(train.result['acc'], './data/parameter_magic/Accuracy')
-            x_vals = np.array([i for i in range(500, 500 * (len(train.result['acc']) + 1), 500)])
-            plot_reuter(np.array(train.result['acc']), x_vals,
-                        './data/parameter_magic/Accuracy_Curve.png',
-                        45000, 50000)
+            
+        elif self.datasetname == 'car':
+            print('car trainning starts')
+            x_S1, y_S1, x_S2, y_S2 = loadcar()
+            train = OLD3S_Shallow(x_S1, y_S1, x_S2, y_S2, 1380, 138, 6, 30, 'parameter_car')
+            train.SecondPeriod()
+        elif self.datasetname == 'arrhythmia':
+            print('arrhythmia trainning starts')
+            x_S1, y_S1, x_S2, y_S2 = loadarrhythmia()
+            train = OLD3S_Shallow(x_S1, y_S1, x_S2, y_S2, T1=60, t=10, dimension1=279, dimension2=30, path='parameter_arrhythmia', RecLossFunc=self.RecLossFunc)
+            train.SecondPeriod()
+        elif self.datasetname == 'thyroid':
+            print('thyroid trainning starts')
+            x_S1, y_S1, x_S2, y_S2 = loadthyroid()
+            train = OLD3S_Shallow(x_S1, y_S1, x_S2, y_S2, 180, 18, 5, 30, 'parameter_thyroid')
+            train.SecondPeriod()
+            
+
         else:
             print('Choose a correct dataset name please')
 

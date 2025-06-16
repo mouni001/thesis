@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import math
 import copy
+import os
 import torch.nn.functional as F
 
 from torch.nn.parameter import Parameter
@@ -340,6 +341,8 @@ class OLD3S_Shallow:
         self.BCELoss = nn.BCELoss()
         self.SmoothL1Loss = nn.SmoothL1Loss()
         self.MSELoss = nn.MSELoss()
+        RecLossFunc = RecLossFunc.strip().lower()
+        print(f"[INFO] Using reconstruction loss: {RecLossFunc}")
         self.RecLossFunc = self.ChoiceOfRecLossFnc(RecLossFunc)
         self.Accuracy = []
         self.a_1 = 0.5
@@ -352,11 +355,15 @@ class OLD3S_Shallow:
         self.autoencoder_2 = AutoEncoder_Shallow(self.dimension2, 1024).to(self.device)
 
     def FirstPeriod(self):
+        print(f"Total samples: {len(self.x_S1)}, T1: {self.T1}, t: {self.t}, B: {self.B}")
+        os.makedirs(f'./data/{self.path}', exist_ok=True)
         classifier_1 = MLP(1024,2).to(self.device)
         optimizer_classifier_1 = torch.optim.Adam(classifier_1.parameters(), self.lr)
 
         optimizer_autoencoder_1 = torch.optim.Adam(self.autoencoder_1.parameters(), self.lr)
         # eta = -8 * math.sqrt(1 / math.log(self.t))
+
+        classifier_2 = None
 
         for (i, x) in enumerate(self.x_S1):
 
@@ -374,13 +381,16 @@ class OLD3S_Shallow:
                 y_hat, loss_classifier_1 = self.HB_Fit(classifier_1,
                                                        encoded_1, y1, optimizer_classifier_1)
 
-                loss_autoencoder_1 = self.BCELoss(torch.sigmoid(decoded_1), x1)
+                loss_autoencoder_1 = self.RecLossFunc(torch.sigmoid(decoded_1), x1)
+
                 loss_autoencoder_1.backward()
                 optimizer_autoencoder_1.step()
 
             else:
                 x2 = self.x_S2[self.i].unsqueeze(0).float().to(self.device)
                 if i == self.B:
+                    """When S2 starts showing up, we need to initialize the second classifier"""
+                    print("Reached transition point: saving net_model1.pth")    
                     classifier_2 = copy.deepcopy(classifier_1)
 
                     torch.save(classifier_1.state_dict(),
@@ -415,7 +425,7 @@ class OLD3S_Shallow:
                 self.a_2 = 1 - self.a_1
 
                 optimizer_autoencoder_2.zero_grad()
-                loss_2_0 = self.BCELoss(torch.sigmoid(decoded_2), x2)
+                loss_2_0 = self.RecLossFunc(torch.sigmoid(decoded_2), x2)
                 loss_2_1 = self.RecLossFunc(encoded_2, encoded_1)
                 loss_autoencoder_2 = loss_2_0 + loss_2_1
                 loss_autoencoder_2.backward()
@@ -437,8 +447,12 @@ class OLD3S_Shallow:
                 self.Accuracy.append(self.accuracy)
                 self.correct = 0
                 print("Accuracy: ", self.accuracy)
-
-        torch.save(classifier_2.state_dict(), './data/'+self.path +'/net_model2.pth')
+        if classifier_2 is not None:
+            torch.save(self.Accuracy, './data/'+self.path +'/Accuracy')
+            torch.save(classifier_2.state_dict(), './data/'+self.path +'/net_model2.pth')
+        else:
+            print("Classifier 2 not initialized, saving only classifier 1.")
+        
 
     def SecondPeriod(self):
         print('use FESA when i<T1')
@@ -476,7 +490,7 @@ class OLD3S_Shallow:
             y_hat_1, loss_classifier_1 = self.HB_Fit(net_model1,
                                                      encoded_2, y1, optimizer_classifier_1_FES)
 
-            loss_autoencoder_2 = self.BCELoss(torch.sigmoid(decoded_2), x)
+            loss_autoencoder_2 = self.RecLossFunc(torch.sigmoid(decoded_2), x)
             loss_autoencoder_2.backward()
             optimizer_autoencoder_2_FES.step()
             y_hat = self.a_1 * y_hat_1 + self.a_2 * y_hat_2
@@ -530,14 +544,23 @@ class OLD3S_Shallow:
         return net_model
 
     def ChoiceOfRecLossFnc(self, name):
-        if name == 'Smooth':
+        name = name.strip().lower()
+        if name == 'smooth':
+            print("[INFO] Using reconstruction loss: SmoothL1")
             return nn.SmoothL1Loss()
-        elif name == 'KL':
+        elif name == 'kl':
+            print("[INFO] Using reconstruction loss: KLDiv")
             return nn.KLDivLoss()
-        elif name == 'BCE':
+        elif name == 'bce':
+            print("[INFO] Using reconstruction loss: BCE")
             return nn.BCELoss()
+        elif name == 'mse' or name == 'mseloss':
+            print("[INFO] Using reconstruction loss: MSE")
+            return nn.MSELoss()
         else:
-            print('Enter correct loss function name!')
+            print('[WARNING] Invalid loss function name, defaulting to SmoothL1Loss')
+            return nn.SmoothL1Loss()
+
 
     def HB_Fit(self, model, X, Y, optimizer):  # hedge backpropagation
         predictions_per_layer = model.forward(X)

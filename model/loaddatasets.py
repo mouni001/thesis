@@ -41,3 +41,75 @@ def loadadult():
     x_S1, y_S1 = shuffle(x_S1, y_S1, random_state=30)
     x_S2, y_S2 = shuffle(x_S2, y_S2, random_state=30)
     return x_S1, y_S1, x_S2, y_S2
+
+def loadcar():
+    df = pd.read_csv('./data/car.data', header=None)
+    categorical_cols = [0, 1, 2, 3, 4]  # all input columns
+    le = preprocessing.LabelEncoder()
+
+    # Encode all categorical input columns
+    for col in categorical_cols:
+        df[col] = le.fit_transform(df[col])
+
+    # Encode the label column (column 5)
+    df[5] = le.fit_transform(df[5])
+    label = df[5].astype(int).values  # Force to integer array
+
+    data = df.iloc[:, :-1].astype(float).values  # Convert to float before scaling
+
+    data = preprocessing.scale(data)
+    matrix = np.random.RandomState(1314).random((data.shape[1], 30))
+    x_S2 = np.dot(data, matrix)
+
+    x_S1 = torch.sigmoid(torch.Tensor(data))
+    x_S2 = torch.sigmoid(torch.Tensor(x_S2))
+    y_S1 = y_S2 = torch.tensor(label, dtype=torch.long)  # Explicit tensor type
+
+    x_S1, y_S1 = shuffle(x_S1, y_S1, random_state=30)
+    x_S2, y_S2 = shuffle(x_S2, y_S2, random_state=30)
+
+    return x_S1, y_S1, x_S2, y_S2
+
+
+
+def loadarrhythmia():
+    df = pd.read_csv('./data/arrhythmia.data', header=None, na_values='?')
+    df = df.dropna()
+
+    data = df.iloc[:, :-1].values
+    label = df.iloc[:, -1].values
+    label = np.array([0 if x == 1 else 1 for x in label])  # binary: 1=normal → 0, else → 1
+
+    data = preprocessing.scale(data)
+    matrix = np.random.RandomState(1314).random((data.shape[1], 30))
+    x_S2 = np.dot(data, matrix)
+
+    x_S1 = torch.sigmoid(torch.Tensor(data))
+    x_S2 = torch.sigmoid(torch.Tensor(x_S2))
+    y_S1 = y_S2 = torch.Tensor(label)
+
+    x_S1, y_S1 = shuffle(x_S1, y_S1, random_state=30)
+    x_S2, y_S2 = shuffle(x_S2, y_S2, random_state=30)
+
+    return x_S1, y_S1, x_S2, y_S2
+
+
+def loadthyroid():
+    df = pd.read_csv('./data/new-thyroid.data', header=None)
+
+    data = df.iloc[:, :-1].values
+    label = df.iloc[:, -1].values
+    label = np.array([0 if x == 1 else 1 for x in label])  # binary
+
+    data = preprocessing.scale(data)
+    matrix = np.random.RandomState(1314).random((data.shape[1], 30))
+    x_S2 = np.dot(data, matrix)
+
+    x_S1 = torch.sigmoid(torch.Tensor(data))
+    x_S2 = torch.sigmoid(torch.Tensor(x_S2))
+    y_S1 = y_S2 = torch.Tensor(label)
+
+    x_S1, y_S1 = shuffle(x_S1, y_S1, random_state=30)
+    x_S2, y_S2 = shuffle(x_S2, y_S2, random_state=30)
+
+    return x_S1, y_S1, x_S2, y_S2
