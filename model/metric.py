@@ -5,6 +5,7 @@ from scipy.interpolate import make_interp_spline
 import os
 
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+##KAPPA
 
 def plot_reuter(y_axi_1, x, path, a, b):
     fig = plt.figure()

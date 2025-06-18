@@ -70,7 +70,7 @@ class OLD3S:
         elif self.datasetname == 'car':
             print('car trainning starts')
             x_S1, y_S1, x_S2, y_S2 = loadcar()
-            train = OLD3S_Shallow(x_S1, y_S1, x_S2, y_S2, 1380, 138, 6, 30, 'parameter_car')
+            train = OLD3S_Shallow(x_S1, y_S1, x_S2, y_S2, 1380, 138, 6, 30, 'parameter_car', RecLossFunc=self.RecLossFunc)
             train.SecondPeriod()
         elif self.datasetname == 'arrhythmia':
             print('arrhythmia trainning starts')
@@ -80,7 +80,7 @@ class OLD3S:
         elif self.datasetname == 'thyroid':
             print('thyroid trainning starts')
             x_S1, y_S1, x_S2, y_S2 = loadthyroid()
-            train = OLD3S_Shallow(x_S1, y_S1, x_S2, y_S2, 180, 18, 5, 30, 'parameter_thyroid')
+            train = OLD3S_Shallow(x_S1, y_S1, x_S2, y_S2, 180, 18, 5, 30, 'parameter_thyroid', RecLossFunc=self.RecLossFunc)
             train.SecondPeriod()
             
 
