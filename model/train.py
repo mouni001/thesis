@@ -58,13 +58,13 @@ class OLD3S:
         if self.datasetname == 'magic':
             print('magic trainning starts')
             x_S1, y_S1, x_S2, y_S2 = loadmagic()
-            train = OLD3S_Shallow(x_S1, y_S1, x_S2, y_S2, 19019, 1919, 10, 30, 'parameter_magic')
+            train = OLD3S_Shallow(x_S1, y_S1, x_S2, y_S2, 19019, 1919, 10, 30, 'parameter_magic', RecLossFunc=self.RecLossFunc)
             train.SecondPeriod()
             
         elif self.datasetname == 'adult':
             print('adult trainning starts')
             x_S1, y_S1, x_S2, y_S2 = loadadult()
-            train = OLD3S_Shallow(x_S1, y_S1, x_S2, y_S2, 32559, 3559, 14, 30, 'parameter_adult')
+            train = OLD3S_Shallow(x_S1, y_S1, x_S2, y_S2, 32559, 3559, 14, 30, 'parameter_adult', RecLossFunc=self.RecLossFunc)
             train.SecondPeriod()
             
         elif self.datasetname == 'car':
@@ -75,15 +75,23 @@ class OLD3S:
         elif self.datasetname == 'arrhythmia':
             print('arrhythmia trainning starts')
             x_S1, y_S1, x_S2, y_S2 = loadarrhythmia()
-            train = OLD3S_Shallow(x_S1, y_S1, x_S2, y_S2, T1=60, t=10, dimension1=279, dimension2=30, path='parameter_arrhythmia', RecLossFunc=self.RecLossFunc)
+            train = OLD3S_Shallow(x_S1, y_S1, x_S2, y_S2, 60, 10, 279, 30, path='parameter_arrhythmia', RecLossFunc=self.RecLossFunc)
             train.SecondPeriod()
         elif self.datasetname == 'thyroid':
             print('thyroid trainning starts')
             x_S1, y_S1, x_S2, y_S2 = loadthyroid()
             train = OLD3S_Shallow(x_S1, y_S1, x_S2, y_S2, 180, 18, 5, 30, 'parameter_thyroid', RecLossFunc=self.RecLossFunc)
             train.SecondPeriod()
-            
-
+        elif self.datasetname == 'insects':
+            print('insects training starts')
+            x_S1, y_S1, x_S2, y_S2 = loadinsects()
+            train = OLD3S_Shallow(x_S1, y_S1, x_S2, y_S2,
+                      2000, 500,
+                      dimension1=x_S1.shape[1],
+                      dimension2=30,
+                      path='parameter_insects',
+                      RecLossFunc=self.RecLossFunc)
+            train.SecondPeriod()
         else:
             print('Choose a correct dataset name please')
 

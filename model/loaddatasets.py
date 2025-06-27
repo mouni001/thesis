@@ -3,6 +3,8 @@ import pandas as pd
 import torch
 from sklearn import preprocessing
 from sklearn.utils import shuffle
+from river import datasets
+from sklearn.preprocessing import StandardScaler
 
 def loadmagic():
     data = pd.read_csv(r"./data/magic04_X.csv", header=None).values
@@ -68,8 +70,8 @@ def loadcar():
     x_S1, y_S1 = shuffle(x_S1, y_S1, random_state=30)
     x_S2, y_S2 = shuffle(x_S2, y_S2, random_state=30)
 
-    return x_S1, y_S1, x_S2, y_S2
 
+    return x_S1, y_S1, x_S2, y_S2
 
 
 def loadarrhythmia():
@@ -78,7 +80,7 @@ def loadarrhythmia():
 
     data = df.iloc[:, :-1].values
     label = df.iloc[:, -1].values
-    label = np.array([0 if x == 1 else 1 for x in label])  # binary: 1=normal → 0, else → 1
+    label = np.array([0 if x == 1 else 1 for x in label])  # binary
 
     data = preprocessing.scale(data)
     matrix = np.random.RandomState(1314).random((data.shape[1], 30))
@@ -88,10 +90,13 @@ def loadarrhythmia():
     x_S2 = torch.sigmoid(torch.Tensor(x_S2))
     y_S1 = y_S2 = torch.Tensor(label)
 
+    # Shuffle
     x_S1, y_S1 = shuffle(x_S1, y_S1, random_state=30)
     x_S2, y_S2 = shuffle(x_S2, y_S2, random_state=30)
 
+
     return x_S1, y_S1, x_S2, y_S2
+
 
 
 def loadthyroid():
@@ -109,6 +114,54 @@ def loadthyroid():
     x_S2 = torch.sigmoid(torch.Tensor(x_S2))
     y_S1 = y_S2 = torch.Tensor(label)
 
+    x_S1, y_S1 = shuffle(x_S1, y_S1, random_state=30)
+    x_S2, y_S2 = shuffle(x_S2, y_S2, random_state=30)
+
+    return x_S1, y_S1, x_S2, y_S2
+
+
+
+
+def loadinsects():
+    df = pd.read_csv('./data/INSECTS.csv', header=None)
+
+    data = df.iloc[:, :-1].values.astype(np.float32)
+    label = df.iloc[:, -1].values
+
+    # Encode labels into 0...C-1
+    le = preprocessing.LabelEncoder()
+    label = le.fit_transform(label)
+
+    # ✅ Convert to binary: class 0 stays 0, all others become 1
+    label = np.array([0 if x == 0 else 1 for x in label])
+    print("Labels:", np.unique(label, return_counts=True))
+
+
+    # Normalize features
+    data = preprocessing.scale(data)
+
+    # Define drift point (e.g., 80% into the stream)
+    drift_point = int(len(data) * 0.8)
+
+    # Pre-drift data
+    x1 = data[:drift_point]
+    y1 = label[:drift_point]
+
+    # Post-drift data
+    x2 = data[drift_point:]
+    y2 = label[drift_point:]
+
+    # Project x2 into new feature space (simulate feature evolution)
+    matrix = np.random.RandomState(1314).random((x2.shape[1], 30))
+    x2_proj = np.dot(x2, matrix)
+
+    x_S1 = torch.sigmoid(torch.tensor(x1, dtype=torch.float32))
+    x_S2 = torch.sigmoid(torch.tensor(x2_proj, dtype=torch.float32))
+
+    y_S1 = torch.tensor(y1, dtype=torch.long)
+    y_S2 = torch.tensor(y2, dtype=torch.long)
+
+    # Shuffle each stream independently
     x_S1, y_S1 = shuffle(x_S1, y_S1, random_state=30)
     x_S2, y_S2 = shuffle(x_S2, y_S2, random_state=30)
 
