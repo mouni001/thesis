@@ -214,6 +214,12 @@ class OLD3S_Shallow:
 
 
             _, predicted = torch.max(y_hat.data, 1)
+            #####
+            from collections import Counter
+            pred_counter = Counter() if i == 0 else pred_counter
+            pred_counter[int(predicted.item())] += 1
+
+
 
             self.correct += (predicted == y).item()
             # record this step’s metrics + resource usage
@@ -232,6 +238,11 @@ class OLD3S_Shallow:
                 self.logs['accuracy'].append(self.accuracy)
 
                 print("Accuracy: ", self.accuracy)
+# ######################################
+        print("Predicted class distribution during FirstPeriod:", pred_counter)
+        true_counter = Counter([int(y.item()) for y in self.y_S1[:self.T1]])
+        print("True class distribution during FirstPeriod:", true_counter)
+
         print("[DEBUG] Finished FirstPeriod, classifier_2 is None?", classifier_2 is None)
         print("[DEBUG] Saving final metrics and models to ./data/" + self.path)
 
@@ -303,6 +314,8 @@ class OLD3S_Shallow:
             self.a_2 = 1 - self.a_1
 
             _, predicted = torch.max(y_hat.data, 1)
+            pred_counter = Counter() if i == 0 else pred_counter
+            pred_counter[int(predicted.item())] += 1
             self.correct += (predicted == y).item()
             if i == 0:
                 print("finish 1")
@@ -316,6 +329,9 @@ class OLD3S_Shallow:
                 self.correct = 0
                 print("Accuracy: ", self.accuracy)
 
+        print("Predicted class distribution during SecondPeriod:", pred_counter)
+        true_counter = Counter([int(y.item()) for y in self.y_S2[:self.B]])
+        print("True class distribution during SecondPeriod:", true_counter)
         torch.save(self.Accuracy, './data/'+self.path +'/Accuracy')
         self._save_logs()
 

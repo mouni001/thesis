@@ -60,7 +60,7 @@ for metric in metrics_to_plot:
         else:
             series = data[metric]
 
-        plt.plot(np.linspace(0, 100, len(series)), series, label=label)
+        plt.plot(np.linspace(0, 1000, len(series)), series, label=label)
 
     plt.xlabel('Stream progress (%)')
     plt.ylabel(pretty_names.get(metric, metric))
