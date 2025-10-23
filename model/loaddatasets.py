@@ -124,45 +124,34 @@ def loadthyroid():
 
 def loadinsects():
     df = pd.read_csv('./data/INSECTS.csv', header=None)
+    X = df.iloc[:, :-1].values.astype(np.float32)
+    y = df.iloc[:, -1].values
 
-    data = df.iloc[:, :-1].values.astype(np.float32)
-    label = df.iloc[:, -1].values
+    # binary: 0 stays 0, others -> 1
+    y = preprocessing.LabelEncoder().fit_transform(y)
+    y = np.array([0 if v == 0 else 1 for v in y], dtype=np.int64)
 
-    # Encode labels into 0...C-1
-    le = preprocessing.LabelEncoder()
-    label = le.fit_transform(label)
+    # normalize features
+    X = preprocessing.scale(X).astype(np.float32)
 
-    # ✅ Convert to binary: class 0 stays 0, all others become 1
-    label = np.array([0 if x == 0 else 1 for x in label])
-    print("Labels:", np.unique(label, return_counts=True))
+    # one shuffle only, then split once
+    rng = np.random.RandomState(30)
+    perm = rng.permutation(len(X))
+    X, y = X[perm], y[perm]
 
+    drift_point = int(len(X) * 0.8)
+    X1, y1 = X[:drift_point], y[:drift_point]
+    X2, y2 = X[drift_point:], y[drift_point:]
 
-    # Normalize features
-    data = preprocessing.scale(data)
+    # simulate feature evolution in S2
+    P = rng.random((X2.shape[1], 30)).astype(np.float32)
+    X2_proj = X2 @ P
 
-    # Define drift point (e.g., 80% into the stream)
-    drift_point = int(len(data) * 0.8)
-
-    # Pre-drift data
-    x1 = data[:drift_point]
-    y1 = label[:drift_point]
-
-    # Post-drift data
-    x2 = data[drift_point:]
-    y2 = label[drift_point:]
-
-    # Project x2 into new feature space (simulate feature evolution)
-    matrix = np.random.RandomState(1314).random((x2.shape[1], 30))
-    x2_proj = np.dot(x2, matrix)
-
-    x_S1 = torch.sigmoid(torch.tensor(x1, dtype=torch.float32))
-    x_S2 = torch.sigmoid(torch.tensor(x2_proj, dtype=torch.float32))
-
+    x_S1 = torch.sigmoid(torch.tensor(X1))
+    x_S2 = torch.sigmoid(torch.tensor(X2_proj))
     y_S1 = torch.tensor(y1, dtype=torch.long)
     y_S2 = torch.tensor(y2, dtype=torch.long)
 
-    # Shuffle each stream independently
-    x_S1, y_S1 = shuffle(x_S1, y_S1, random_state=30)
-    x_S2, y_S2 = shuffle(x_S2, y_S2, random_state=30)
-
+    print("Label counts S1:", np.bincount(y1))
+    print("Label counts S2:", np.bincount(y2))
     return x_S1, y_S1, x_S2, y_S2
