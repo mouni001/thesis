@@ -9,6 +9,9 @@ import torch.nn.functional as F
 from torch.nn.parameter import Parameter
 from river import drift
 
+from mddm_moa_exact import MDDM_G_Exact
+from mddm_moa_exact import MDDM_A_Exact, MDDM_E_Exact 
+
 from autoencoder import AutoEncoder_Shallow
 from mlp import MLP
 from evaluator_stream import update_all  # windowed prequential metrics
@@ -29,6 +32,14 @@ class OLD3S_Shallow:
         RecLossFunc='BCE',
         use_ema_anchor: bool = True,
         ema_momentum: float = 0.98,
+
+
+        detector_type: str = 'adwin',
+        mddm_win: int = 100,
+        mddm_ratio: float = 1.01,
+        mddm_delta: float = 1e-6,
+        
+
     ):
         self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
@@ -54,6 +65,8 @@ class OLD3S_Shallow:
         self.BCELoss  = nn.BCELoss()
         self.SmoothL1 = nn.SmoothL1Loss()
         self.MSELoss  = nn.MSELoss()
+
+        
 
         name = RecLossFunc.strip().lower()
         print(f"[INFO] Using reconstruction loss: {name}")
@@ -81,8 +94,14 @@ class OLD3S_Shallow:
         self.enc1_ema = None
         self.enc1_ema_momentum = float(ema_momentum)
 
+
+        self.detector_type = str(detector_type).lower()
+        self.mddm_win   = int(mddm_win)
+        self.mddm_ratio = float(mddm_ratio)
+        self.mddm_delta = float(mddm_delta)
         # metrics/logging containers
         self._start_tracing()
+
 
     # ──────────────────────────────────────────────────────────────────────────
     # Logging utilities
@@ -98,16 +117,30 @@ class OLD3S_Shallow:
             self._use_tracemalloc = False
 
         # drift detector operates on error stream
-        self.detector = drift.ADWIN()
+        # self.detector = drift.ADWIN()
+        if self.detector_type == 'mddm_g':
+            print(f"[INFO] Using MDDM_G (n={self.mddm_win}, ratio={self.mddm_ratio}, delta={self.mddm_delta})")
+            self.detector = MDDM_G_Exact(n=self.mddm_win, ratio=self.mddm_ratio, delta=self.mddm_delta)
+        elif self.detector_type == 'mddm_a':
+            print(f"[INFO] Using MDDM_A (n={self.mddm_win}, delta={self.mddm_delta})")
+            self.detector = MDDM_A_Exact(n=self.mddm_win, delta=self.mddm_delta)
+        elif self.detector_type == 'mddm_e':
+            print(f"[INFO] Using MDDM_E (n={self.mddm_win}, beta=0.02, delta={self.mddm_delta})")
+            self.detector = MDDM_E_Exact(n=self.mddm_win, beta=0.02, delta=self.mddm_delta)
+        else:
+            print("[INFO] Using ADWIN drift detector")
+            self.detector = drift.ADWIN()
 
         # windowed logs (sliding metrics via evaluator_stream.update_all)
         self.logs = {k: [] for k in [
             'accuracy','kappa','kappa_m','kappa_t','gmean','f1_min','pr_auc',
             'rec_min','prec_min','prec_maj','rec_maj','f1_maj',
-            'drift','times','mems'
+            'drift','times','mems', "oca"
         ]}
         self._all_labels = []
         self._duration = 0.0
+        self._oca_seen = 0
+        self._oca_correct = 0
 
     def _record_step(self, y_true: int, p1: float, step: int):
         """
@@ -119,9 +152,32 @@ class OLD3S_Shallow:
                   'pr_auc','rec_min','prec_min','prec_maj','rec_maj','f1_maj']:
             self.logs[k].append(row.get(k, np.nan))
 
-        y_pred = int(p1 >= 0.5)
-        if self.detector.update(int(y_pred != int(y_true))):
-            self.logs['drift'].append(step)
+        # y_pred = int(p1 >= 0.5)
+               # ---- OCA (cumulative) with evaluator's y_pred ----
+        y_pred = int(row.get("y_pred", int(p1 >= 0.5)))
+        self._oca_seen += 1
+        self._oca_correct += int(y_pred == int(y_true))
+        self.logs['oca'].append(self._oca_correct / max(1, self._oca_seen))
+        # signal detection
+        # use evaluator’s prediction everywhere
+        y_pred_eval = int(row.get("y_pred", int(p1 >= 0.5)))
+
+        # OCA from evaluator’s prediction
+        self._oca_seen += 1
+        self._oca_correct += int(y_pred_eval == int(y_true))
+        self.logs['oca'].append(self._oca_correct / max(1, self._oca_seen))
+
+        # detector streams
+        if self.detector_type in ('mddm_g', 'mddm_e', 'mddm_a'):
+            correct_bit = int(y_pred_eval == int(y_true))   # 1=correct, 0=error
+            if self.detector.update(correct_bit):
+                self.logs['drift'].append(step)
+        else:
+            err_bit = int(y_pred_eval != int(y_true))       # ADWIN sees error-rate stream
+            if self.detector.update(err_bit):
+                self.logs['drift'].append(step)
+
+
 
         self.logs['times'].append(float(self._duration))
         if self._use_tracemalloc:
@@ -158,6 +214,14 @@ class OLD3S_Shallow:
             L = min(len(arrays[k]) for k in series_keys)
             for k in series_keys:
                 arrays[k] = arrays[k][:L]
+
+               # ACR from OCA: mean( f* - OCA_t )
+        if 'oca' in arrays and arrays['oca'].size > 0:
+            f_star = float(np.nanmax(arrays['oca']))
+            acr = float(np.nanmean(f_star - arrays['oca']))
+        else:
+            acr = float('nan')
+        arrays['acr'] = np.asarray([acr], dtype=np.float32)
 
         np.savez(f'{outdir}/all_metrics.npz', **arrays)
 

@@ -40,7 +40,7 @@ def _nochange_acc(labels):
 def _kappa_like(acc, acc_baseline):
     denom = 1.0 - acc_baseline
     if denom <= 1e-12:
-        return 0.0
+        return float('nan')  # undefined when baseline ~ 1.0
     return (acc - acc_baseline) / denom
 
 def _per_class_from_pairs_dynamic(pairs, labels):
@@ -110,9 +110,10 @@ def update_all(y_true: int, y_proba: float):
     acc_model    = _acc_from_pairs(pairs_win)
     acc_majority = _majority_acc(labels_win)
     acc_nochange = _nochange_acc(labels_win)
+    both_classes = (len(set(labels_win)) > 1)
 
     # KappaM / KappaT (MOA definitions)
-    kappa_m = _kappa_like(acc_model, acc_majority)
+    kappa_m = _kappa_like(acc_model, acc_majority) if both_classes else float('nan')
     kappa_t = _kappa_like(acc_model, acc_nochange)
 
      # Per-class metrics + G-mean (minority decided dynamically)
@@ -140,4 +141,6 @@ def update_all(y_true: int, y_proba: float):
 
         "gmean":    gmean,
         "pr_auc":   pr_auc,
+        "y_pred": int(y_pred),
+        "tau": float(tau),
     }

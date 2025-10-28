@@ -5,6 +5,8 @@ from model import *
 from loaddatasets import *
 from collections import Counter
 
+
+
 # During the overlap period (T1):
 
 # You have access to both x_S1 and x_S2
@@ -33,10 +35,15 @@ def main():
     parser = argparse.ArgumentParser(description="Options")
     parser.add_argument('-DataName', action='store', dest='DataName', default='enfr')
     parser.add_argument('-AutoEncoder', action='store', dest='AutoEncoder', default='VAE')
-    parser.add_argument('-beta', action='store', dest='beta', default=0.9)
-    parser.add_argument('-eta', action='store', dest='eta', default=-0.01)
-    parser.add_argument('-learningrate', action='store', dest='learningrate', default=0.01)
+    parser.add_argument('-beta', action='store', dest='beta', default=0.9, type=float)
+    parser.add_argument('-eta', action='store', dest='eta', default=-0.01, type=float)
+    parser.add_argument('-learningrate', action='store', dest='learningrate', default=0.01, type=float)
     parser.add_argument('-RecLossFunc', action='store', dest='RecLossFunc', default='Smooth')
+    parser.add_argument('-DriftDetector', dest='DriftDetector', default='adwin',
+                        choices=['adwin', 'mddm_g', 'mddm_a', 'mddm_e'])
+    parser.add_argument('-MDDM_win',      dest='MDDM_win',      default=100,    type=int)
+    parser.add_argument('-MDDM_ratio',    dest='MDDM_ratio',    default=1.01,   type=float)
+    parser.add_argument('-MDDM_delta',    dest='MDDM_delta',    default=1e-6,   type=float)
     args = parser.parse_args()
     learner = OLD3S(args)
     learner.train()
@@ -54,6 +61,11 @@ class OLD3S:
         self.eta = args.eta
         self.learningrate = args.learningrate
         self.RecLossFunc = args.RecLossFunc
+
+        self.driftdet   = args.DriftDetector
+        self.mddm_win   = args.MDDM_win
+        self.mddm_ratio = args.MDDM_ratio
+        self.mddm_delta = args.MDDM_delta
 
     def train(self):
         if self.datasetname == 'magic':
@@ -86,12 +98,22 @@ class OLD3S:
         elif self.datasetname == 'insects':
             print('insects training starts')
             x_S1, y_S1, x_S2, y_S2 = loadinsects()
-            train = OLD3S_Shallow(x_S1, y_S1, x_S2, y_S2,
-                      2000, 500,
-                      dimension1=x_S1.shape[1],
-                      dimension2=30,
-                      path='parameter_insects',
-                      RecLossFunc=self.RecLossFunc)
+
+            out_path = 'parameter_insects' if self.driftdet == 'adwin' else 'parameter_insects_mddm'
+            
+            train = OLD3S_Shallow(x_S1, y_S1, x_S2, y_S2, 
+                                  2000, 500,
+                                  dimension1=x_S1.shape[1],
+                                  dimension2=30,
+                                  path= out_path,
+                                  RecLossFunc=self.RecLossFunc,
+                                  lr = self.learningrate,
+                                  b = self.beta,
+                                  eta = self.eta,
+                                  detector_type=self.driftdet,
+                                  mddm_win=self.mddm_win,
+                                  mddm_ratio=self.mddm_ratio,
+                                  mddm_delta=self.mddm_delta)
             train.SecondPeriod()
         else:
             print('Choose a correct dataset name please')

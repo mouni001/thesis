@@ -12,7 +12,7 @@ DEFAULT_KEYS = [
     "accuracy","kappa","kappa_m","kappa_t",
     "prec_min","rec_min","f1_min",
     "prec_maj","rec_maj","f1_maj",
-    "gmean","pr_auc"
+    "gmean","pr_auc", "oca"
 ]
 
 class StreamMetricLogger:
@@ -37,6 +37,10 @@ class StreamMetricLogger:
                 tracemalloc.start()
             except Exception:
                 self._use_mem = False
+            #OCA (cumulative accuracy)
+        self._oca_seen = 0
+        self._oca_correct = 0
+        self._oca_series = []
 
     def start_step(self):
         """Call at the very beginning of a test step."""
@@ -50,11 +54,20 @@ class StreamMetricLogger:
         row = update_all(int(y_true), float(y_proba1))
         # append rolling/windowed metrics
         for k in self.window_keys:
-            self.metrics[k].append(float(row.get(k, float("nan"))))
+            if k != "oca":
+                self.metrics[k].append(float(row.get(k, float("nan"))))
         self.y_true_all.append(int(y_true))
 
+        # update OCA
+        y_pred = int(row.get("y_pred", int(y_proba1 >= 0.5)))
+        self._oca_seen += 1
+        self._oca_correct += int(y_pred == y_true)
+        oca_t = self._oca_correct / max(1, self._oca_seen)
+        self._oca_series.append(float(oca_t))
+        self.metrics["oca"].append(float(oca_t))
+
     def end_step(self):
-        """Call at the very end of the step (after training if you want total step cost)."""
+        """Call at the very end of the step (after training if want total step cost)."""
         dt = time.time() - getattr(self, "_step_t", time.time())
         self.times.append(float(dt))
         if self._use_mem:
@@ -77,6 +90,15 @@ class StreamMetricLogger:
         out["y_true"] = np.asarray(self.y_true_all, dtype=np.int8)
         out["times"]  = np.asarray(self.times, dtype=np.float32)
         out["mems"]   = np.asarray(self.mems, dtype=np.float32)
+
+        # ACR = mean( f* - OCA_t ), f* = max_t OCA_t
+        if len(self._oca_series) > 0:
+            oca = np.asarray(self._oca_series, dtype=np.float32)
+            f_star = float(np.nanmax(oca))
+            acr = float(np.nanmean(f_star - oca))
+        else:
+            acr = float("nan")
+        out["acr"] = np.asarray([acr], dtype=np.float32)  # store scalar as length-1 array
         np.savez(os.path.join(save_dir, "all_metrics.npz"), **out)
 
     def stop(self):
