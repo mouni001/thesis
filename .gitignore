@@ -9,7 +9,7 @@ __pycache__/
 *.csv
 *.mat
 *.pth
-
+*.png
 # Ignore IDE settings
 .vscode/
 .idea/
