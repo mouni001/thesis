@@ -1,157 +1,191 @@
+# loaddatasets.py
+# Dataset loaders used by train.py / model.py
+
+from __future__ import annotations
+
+import os
+from typing import Tuple
+
 import numpy as np
 import pandas as pd
 import torch
+
 from sklearn import preprocessing
 from sklearn.utils import shuffle
-from river import datasets
-from sklearn.preprocessing import StandardScaler
 
-def loadmagic():
-    data = pd.read_csv(r"./data/magic04_X.csv", header=None).values
-    label = pd.read_csv(r"./data/magic04_y.csv", header=None).values
-    for i in label:
-        if i[0] == -1:
-            i[0] = 0
+
+def _here(*parts: str) -> str:
+    """Return a path relative to this repo folder."""
+    return os.path.join(os.path.dirname(__file__), *parts)
+
+
+def loadmagic() -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    """MAGIC dataset used in the original OLD³S paper (binary)."""
+    X = pd.read_csv(_here("data", "magic04_X.csv"), header=None).values.astype(np.float32)
+    y = pd.read_csv(_here("data", "magic04_y.csv"), header=None).values.reshape(-1)
+
+    # map {-1, +1} -> {0, 1}
+    y = np.where(y == -1, 0, 1).astype(np.int64)
+
+    # standardize
+    X = preprocessing.scale(X).astype(np.float32)
+
+    # feature evolution: project X -> 30 dims for S2
     rd1 = np.random.RandomState(1314)
-    data = preprocessing.scale(data)
-    matrix1 = rd1.random((10, 30))
-    x_S2 = np.dot(data, matrix1)
-    x_S1 = torch.sigmoid(torch.Tensor(data))
-    x_S2 = torch.sigmoid(torch.Tensor(x_S2))
-    y_S1, y_S2 = torch.Tensor(label), torch.Tensor(label)
+    matrix1 = rd1.random((X.shape[1], 30)).astype(np.float32)
+    X2 = X @ matrix1
+
+    x_S1 = torch.sigmoid(torch.tensor(X, dtype=torch.float32))
+    x_S2 = torch.sigmoid(torch.tensor(X2, dtype=torch.float32))
+    y_S1 = torch.tensor(y, dtype=torch.long)
+    y_S2 = torch.tensor(y, dtype=torch.long)
+
+    # for static datasets we can shuffle (NOT for streaming drift datasets)
     x_S1, y_S1 = shuffle(x_S1, y_S1, random_state=50)
     x_S2, y_S2 = shuffle(x_S2, y_S2, random_state=50)
     return x_S1, y_S1, x_S2, y_S2
 
-def loadadult():
-    df1 = pd.read_csv(r"C:\\Users\\mouni\\OneDrive\\Documents\\master\\these\\code\\OLD3S\\model\\data\\adult.data",  header=None, skipinitialspace=True)
-    df1.columns = ['a','b','c','d','e','f','g','h','i','j','k','l','m','n','o']
+
+def loadadult() -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Adult dataset (binary)."""
+    # NOTE: your zip doesn't include adult.data; keep this loader for completeness.
+    path = _here("data", "adult.data")
+    df = pd.read_csv(path, header=None, skipinitialspace=True)
+    df.columns = [chr(ord("a") + i) for i in range(df.shape[1])]
+
     le = preprocessing.LabelEncoder()
-    categorical_cols = ['b','d','f','g','h','i','j','n','o']
-    for col in categorical_cols:
-        le.fit(df1[col])
-        df1[col] = le.transform(df1[col])
-    data = np.array(df1.iloc[:, :-1])
-    label = np.array(df1.o)
-    rd1 = np.random.RandomState(1314)
-    data = preprocessing.scale(data)
-    matrix1 = rd1.random((14, 30))
-    x_S2 = np.dot(data, matrix1)
-    x_S1 = torch.sigmoid(torch.Tensor(data))
-    x_S2 = torch.sigmoid(torch.Tensor(x_S2))
-    y_S1, y_S2 = torch.Tensor(label), torch.Tensor(label)
-    x_S1, y_S1 = shuffle(x_S1, y_S1, random_state=30)
-    x_S2, y_S2 = shuffle(x_S2, y_S2, random_state=30)
-    return x_S1, y_S1, x_S2, y_S2
+    cat_cols = ["b", "d", "f", "g", "h", "i", "j", "n", "o"]
+    for col in cat_cols:
+        df[col] = le.fit_transform(df[col].astype(str))
 
-def loadcar():
-    df = pd.read_csv('./data/car.data', header=None)
-    categorical_cols = [0, 1, 2, 3, 4]  # all input columns
-    le = preprocessing.LabelEncoder()
+    # label (last column)
+    y_raw = df["o"].astype(str)
+    y = preprocessing.LabelEncoder().fit_transform(y_raw).astype(np.int64)
 
-    # Encode all categorical input columns
-    for col in categorical_cols:
-        df[col] = le.fit_transform(df[col])
-
-    # Encode the label column (column 5)
-    df[5] = le.fit_transform(df[5])
-    label = df[5].astype(int).values  # Force to integer array
-
-    data = df.iloc[:, :-1].astype(float).values  # Convert to float before scaling
-
-    data = preprocessing.scale(data)
-    matrix = np.random.RandomState(1314).random((data.shape[1], 30))
-    x_S2 = np.dot(data, matrix)
-
-    x_S1 = torch.sigmoid(torch.Tensor(data))
-    x_S2 = torch.sigmoid(torch.Tensor(x_S2))
-    y_S1 = y_S2 = torch.tensor(label, dtype=torch.long)  # Explicit tensor type
-
-    x_S1, y_S1 = shuffle(x_S1, y_S1, random_state=30)
-    x_S2, y_S2 = shuffle(x_S2, y_S2, random_state=30)
-
-
-    return x_S1, y_S1, x_S2, y_S2
-
-
-def loadarrhythmia():
-    df = pd.read_csv('./data/arrhythmia.data', header=None, na_values='?')
-    df = df.dropna()
-
-    data = df.iloc[:, :-1].values
-    label = df.iloc[:, -1].values
-    label = np.array([0 if x == 1 else 1 for x in label])  # binary
-
-    data = preprocessing.scale(data)
-    matrix = np.random.RandomState(1314).random((data.shape[1], 30))
-    x_S2 = np.dot(data, matrix)
-
-    x_S1 = torch.sigmoid(torch.Tensor(data))
-    x_S2 = torch.sigmoid(torch.Tensor(x_S2))
-    y_S1 = y_S2 = torch.Tensor(label)
-
-    # Shuffle
-    x_S1, y_S1 = shuffle(x_S1, y_S1, random_state=30)
-    x_S2, y_S2 = shuffle(x_S2, y_S2, random_state=30)
-
-
-    return x_S1, y_S1, x_S2, y_S2
-
-
-
-def loadthyroid():
-    df = pd.read_csv('./data/new-thyroid.data', header=None)
-
-    data = df.iloc[:, :-1].values
-    label = df.iloc[:, -1].values
-    label = np.array([0 if x == 1 else 1 for x in label])  # binary
-
-    data = preprocessing.scale(data)
-    matrix = np.random.RandomState(1314).random((data.shape[1], 30))
-    x_S2 = np.dot(data, matrix)
-
-    x_S1 = torch.sigmoid(torch.Tensor(data))
-    x_S2 = torch.sigmoid(torch.Tensor(x_S2))
-    y_S1 = y_S2 = torch.Tensor(label)
-
-    x_S1, y_S1 = shuffle(x_S1, y_S1, random_state=30)
-    x_S2, y_S2 = shuffle(x_S2, y_S2, random_state=30)
-
-    return x_S1, y_S1, x_S2, y_S2
-
-
-
-
-def loadinsects():
-    df = pd.read_csv('./data/INSECTS.csv', header=None)
     X = df.iloc[:, :-1].values.astype(np.float32)
-    y = df.iloc[:, -1].values
-
-    # binary: 0 stays 0, others -> 1
-    y = preprocessing.LabelEncoder().fit_transform(y)
-    y = np.array([0 if v == 0 else 1 for v in y], dtype=np.int64)
-
-    # normalize features
     X = preprocessing.scale(X).astype(np.float32)
 
-    # one shuffle only, then split once
-    rng = np.random.RandomState(30)
-    perm = rng.permutation(len(X))
-    X, y = X[perm], y[perm]
+    rd1 = np.random.RandomState(1314)
+    matrix1 = rd1.random((X.shape[1], 30)).astype(np.float32)
+    X2 = X @ matrix1
 
-    drift_point = int(len(X) * 0.8)
-    X1, y1 = X[:drift_point], y[:drift_point]
-    X2, y2 = X[drift_point:], y[drift_point:]
+    x_S1 = torch.sigmoid(torch.tensor(X, dtype=torch.float32))
+    x_S2 = torch.sigmoid(torch.tensor(X2, dtype=torch.float32))
+    y_S1 = torch.tensor(y, dtype=torch.long)
+    y_S2 = torch.tensor(y, dtype=torch.long)
 
-    # simulate feature evolution in S2
-    P = rng.random((X2.shape[1], 30)).astype(np.float32)
-    X2_proj = X2 @ P
-
-    x_S1 = torch.sigmoid(torch.tensor(X1))
-    x_S2 = torch.sigmoid(torch.tensor(X2_proj))
-    y_S1 = torch.tensor(y1, dtype=torch.long)
-    y_S2 = torch.tensor(y2, dtype=torch.long)
-
-    print("Label counts S1:", np.bincount(y1))
-    print("Label counts S2:", np.bincount(y2))
+    x_S1, y_S1 = shuffle(x_S1, y_S1, random_state=30)
+    x_S2, y_S2 = shuffle(x_S2, y_S2, random_state=30)
     return x_S1, y_S1, x_S2, y_S2
+
+
+def loadcar() -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Car Evaluation (multi-class: 4 classes)."""
+    df = pd.read_csv(_here("data", "car.data"), header=None)
+    le = preprocessing.LabelEncoder()
+
+    # all input columns are categorical
+    for col in range(df.shape[1] - 1):
+        df[col] = le.fit_transform(df[col].astype(str))
+
+    # label column
+    y = preprocessing.LabelEncoder().fit_transform(df[df.shape[1] - 1].astype(str)).astype(np.int64)
+
+    X = df.iloc[:, :-1].values.astype(np.float32)
+    X = preprocessing.scale(X).astype(np.float32)
+
+    rd1 = np.random.RandomState(1314)
+    matrix1 = rd1.random((X.shape[1], 30)).astype(np.float32)
+    X2 = X @ matrix1
+
+    x_S1 = torch.sigmoid(torch.tensor(X, dtype=torch.float32))
+    x_S2 = torch.sigmoid(torch.tensor(X2, dtype=torch.float32))
+    y_S1 = torch.tensor(y, dtype=torch.long)
+    y_S2 = torch.tensor(y, dtype=torch.long)
+
+    x_S1, y_S1 = shuffle(x_S1, y_S1, random_state=30)
+    x_S2, y_S2 = shuffle(x_S2, y_S2, random_state=30)
+    return x_S1, y_S1, x_S2, y_S2
+
+
+def loadarrhythmia() -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Arrhythmia (binary in your setup: label==1 -> 0 else 1)."""
+    df = pd.read_csv(_here("data", "arrhythmia.data"), header=None, na_values="?")
+    df = df.dropna()
+
+    X = df.iloc[:, :-1].values.astype(np.float32)
+    y_raw = df.iloc[:, -1].values
+    y = np.array([0 if int(v) == 1 else 1 for v in y_raw], dtype=np.int64)
+
+    X = preprocessing.scale(X).astype(np.float32)
+    rd1 = np.random.RandomState(1314)
+    matrix1 = rd1.random((X.shape[1], 30)).astype(np.float32)
+    X2 = X @ matrix1
+
+    x_S1 = torch.sigmoid(torch.tensor(X, dtype=torch.float32))
+    x_S2 = torch.sigmoid(torch.tensor(X2, dtype=torch.float32))
+    y_S1 = torch.tensor(y, dtype=torch.long)
+    y_S2 = torch.tensor(y, dtype=torch.long)
+
+    x_S1, y_S1 = shuffle(x_S1, y_S1, random_state=30)
+    x_S2, y_S2 = shuffle(x_S2, y_S2, random_state=30)
+    return x_S1, y_S1, x_S2, y_S2
+
+
+def loadthyroid() -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    """New Thyroid (binary in your setup: label==1 -> 0 else 1)."""
+    df = pd.read_csv(_here("data", "new-thyroid.data"), header=None)
+    X = df.iloc[:, :-1].values.astype(np.float32)
+    y_raw = df.iloc[:, -1].values
+    y = np.array([0 if int(v) == 1 else 1 for v in y_raw], dtype=np.int64)
+
+    X = preprocessing.scale(X).astype(np.float32)
+    rd1 = np.random.RandomState(1314)
+    matrix1 = rd1.random((X.shape[1], 30)).astype(np.float32)
+    X2 = X @ matrix1
+
+    x_S1 = torch.sigmoid(torch.tensor(X, dtype=torch.float32))
+    x_S2 = torch.sigmoid(torch.tensor(X2, dtype=torch.float32))
+    y_S1 = torch.tensor(y, dtype=torch.long)
+    y_S2 = torch.tensor(y, dtype=torch.long)
+
+    x_S1, y_S1 = shuffle(x_S1, y_S1, random_state=30)
+    x_S2, y_S2 = shuffle(x_S2, y_S2, random_state=30)
+    return x_S1, y_S1, x_S2, y_S2
+
+
+def load_insects_from_csv(csv_path: str, split_ratio: float = 0.8):
+    """INSECTS loader (stream order preserved, multi-class preserved).
+
+    - labels are encoded to {0..C-1}
+    - NO shuffle (keeps stream/drift order)
+    - sequential split into S1 then S2 (default 80/20)
+    """
+    if not os.path.isfile(csv_path):
+        raise FileNotFoundError(f"INSECTS file not found: {csv_path}")
+
+    df = pd.read_csv(csv_path, header=None)
+    X = df.iloc[:, :-1].values.astype(np.float32)
+    y_raw = df.iloc[:, -1].values
+
+    y = preprocessing.LabelEncoder().fit_transform(y_raw).astype(np.int64)
+    X = preprocessing.scale(X).astype(np.float32)
+
+    n = len(X)
+    split_idx = int(n * float(split_ratio))
+    X1, y1 = X[:split_idx], y[:split_idx]
+    X2, y2 = X[split_idx:], y[split_idx:]
+
+    x_S1 = torch.tensor(X1, dtype=torch.float32)
+    y_S1 = torch.tensor(y1, dtype=torch.long)
+    x_S2 = torch.tensor(X2, dtype=torch.float32)
+    y_S2 = torch.tensor(y2, dtype=torch.long)
+    return x_S1, y_S1, x_S2, y_S2
+
+
+def loadinsects(csv_path: str | None = None, split_ratio: float = 0.8):
+    """Convenience wrapper used by some scripts."""
+    if csv_path is None:
+        # use a file that exists in your zip by default
+        csv_path = _here("data", "INSECTS incremental-reoccurring_balanced.csv")
+    return load_insects_from_csv(csv_path, split_ratio=split_ratio)

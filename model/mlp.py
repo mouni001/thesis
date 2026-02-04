@@ -1,101 +1,52 @@
+# mlp.py
 import torch
-from torch import nn
+import torch.nn as nn
 import torch.nn.functional as F
 
 
-class BasicBlock(nn.Module):
-
-    def __init__(self, in_planes, planes):
-        super(BasicBlock, self).__init__()
-        self.Linear1 = nn.Linear(
-            in_planes, planes)
-        self.relu = nn.ReLU()
-
-    def forward(self, x):
-        out = self.Linear1(x)
-        out = self.relu(out)
-        return out
-
-
 class MLP(nn.Module):
+    """
+    Multi-head MLP for Hedge Backpropagation.
+    Returns a list of logits: [head1, head2, ..., headK]
+    where deeper heads see more layers.
+    """
+    def __init__(self, in_planes: int, num_classes: int, hidden: int = 64, n_heads: int = 5):
+        super().__init__()
+        self.in_planes = int(in_planes)
+        self.num_classes = int(num_classes)
+        self.hidden = int(hidden)
+        self.n_heads = int(n_heads)
 
-    def __init__(self, in_planes, num_classes = 6):
-        self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-        super(MLP, self).__init__()
-        self.in_planes = in_planes
-        self.num_classes = num_classes
-        self.Linear = nn.Linear(self.in_planes, self.in_planes)
-        self.hidden_layers = []
-        self.output_layers = []
+        # Shared trunk layers (we will use progressively deeper prefixes as "heads")
+        self.fc1 = nn.Linear(self.in_planes, self.hidden)
+        self.fc2 = nn.Linear(self.hidden, self.hidden)
+        self.fc3 = nn.Linear(self.hidden, self.hidden)
+        self.fc4 = nn.Linear(self.hidden, self.hidden)
+        self.fc5 = nn.Linear(self.hidden, self.hidden)
 
-        self.hidden_layers.append(BasicBlock(self.in_planes,self.in_planes))
-        self.hidden_layers.append(BasicBlock(self.in_planes, self.in_planes))
-        self.hidden_layers.append(BasicBlock(self.in_planes, self.in_planes))
-        self.hidden_layers.append(BasicBlock(self.in_planes, self.in_planes))
-
-        self.output_layers.append(self._make_mlp1(self.in_planes))
-        self.output_layers.append(self._make_mlp2(self.in_planes))
-        self.output_layers.append(self._make_mlp3(self.in_planes))
-        self.output_layers.append(self._make_mlp4(self.in_planes))
-        self.output_layers.append(self._make_mlp4(self.in_planes))
-
-        self.hidden_layers = nn.ModuleList(self.hidden_layers)  #
-        self.output_layers = nn.ModuleList(self.output_layers)  #
-
-    def _make_mlp1(self, in_planes):
-        """Used to predict the class label from different depths in the network."""
-        classifier = nn.Sequential(
-            nn.ReLU(),
-            nn.Linear(in_planes, self.num_classes),
-
-        )
-        return classifier
-
-    def _make_mlp2(self, in_planes):
-        classifier = nn.Sequential(
-            nn.ReLU(),
-            nn.Linear(in_planes, self.num_classes),
-
-        )
-        return classifier
-
-    def _make_mlp3(self, in_planes):
-        classifier = nn.Sequential(
-            nn.ReLU(),
-            nn.Linear(in_planes, self.num_classes),
-
-        )
-        return classifier
-
-    def _make_mlp4(self, in_planes):
-        classifier = nn.Sequential(
-            nn.ReLU(),
-            nn.Linear(in_planes, self.num_classes),
-
-        )
-        return classifier
-
-    def _make_mlp5(self, in_planes):
-        classifier = nn.Sequential(
-            nn.ReLU(),
-            nn.Linear(in_planes, self.num_classes),
-
-        )
-        return classifier
+        # One classifier per head
+        self.heads = nn.ModuleList([nn.Linear(self.hidden, self.num_classes) for _ in range(self.n_heads)])
 
     def forward(self, x):
-        hidden_connections = []
-        hidden_connections.append(F.relu(self.Linear(x)))
-        """It builds up a sequence of hidden outputs, just like in ResNet.
+        """
+        x: [N, D]
+        returns: list of [N, C] logits, length = n_heads
+        """
+        outs = []
 
-Then it applies all the classifier heads to those hidden layers:"""
+        h1 = F.relu(self.fc1(x))
+        outs.append(self.heads[0](h1))
 
-        for i in range(len(self.hidden_layers)):
-            hidden_connections.append(self.hidden_layers[i](hidden_connections[i]))
+        h2 = F.relu(self.fc2(h1))
+        outs.append(self.heads[1](h2))
 
-        output_class = []
-        for i in range(len(self.output_layers)):
-            output = self.output_layers[i](hidden_connections[i])
-            output_class.append(output)
+        h3 = F.relu(self.fc3(h2))
+        outs.append(self.heads[2](h3))
 
-        return output_class
+        h4 = F.relu(self.fc4(h3))
+        outs.append(self.heads[3](h4))
+
+        h5 = F.relu(self.fc5(h4))
+        outs.append(self.heads[4](h5))
+
+        return outs

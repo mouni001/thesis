@@ -40,6 +40,8 @@ pretty = {
     'f1_maj':'F1 (Majority)',
     'oca':'Overall Classification Accuracy (Cumulative)',
 }
+def slug_metric(name: str) -> str:
+    return name.lower().replace(" ", "_").replace("(", "").replace(")", "").replace("-", "")
 
 def smooth(y, k=0.02):
     if len(y) < 5:
@@ -99,7 +101,13 @@ for fp in files:
     plot_drift(ax, drift_idx, n)
     ax.set_xlabel("Stream progress (%)"); ax.set_ylabel("Recall")
     ax.set_title("Prequential Recall (Minority vs Majority)"); ax.set_ylim(0,1); ax.grid(True, alpha=0.3); ax.legend()
-    plt.show()
+    # plt.show()
+
+    os.makedirs(os.path.dirname(fp), exist_ok=True)  # already exists but safe
+    out_base = os.path.splitext(fp)[0]  # .../metrics/all_metrics
+    plt.savefig(out_base + f"__{slug_metric('Minority vs Majority')}.png", dpi=180, bbox_inches="tight")
+    plt.close()
+
 
 # -------- KappaM / KappaT --------
 for fp in files:
@@ -113,7 +121,12 @@ for fp in files:
         plot_drift(ax, drift_idx, n)
         ax.set_xlabel("Stream progress (%)"); ax.set_ylabel("KappaM")
         ax.set_title("KappaM (vs Majority)"); ax.set_ylim(-0.1,1.0); ax.grid(True, alpha=0.3); ax.legend()
-        plt.show()
+        # plt.show()
+        os.makedirs(os.path.dirname(fp), exist_ok=True)  # already exists but safe
+        out_base = os.path.splitext(fp)[0]  # .../metrics/all_metrics
+        plt.savefig(out_base + f"__{slug_metric('KappaM (vs Majority)')}.png", dpi=180, bbox_inches="tight")
+        plt.close()
+
 
     if "kappa_t" in data.files:
         kt = data["kappa_t"].astype(float); n = len(kt); x_pct = np.linspace(0,100,n)
@@ -124,7 +137,13 @@ for fp in files:
         plot_drift(ax, drift_idx, n)
         ax.set_xlabel("Stream progress (%)"); ax.set_ylabel("KappaT")
         ax.set_title("KappaT (Temporal)"); ax.set_ylim(-0.1,1.0); ax.grid(True, alpha=0.3); ax.legend()
-        plt.show()
+        # plt.show()
+
+        os.makedirs(os.path.dirname(fp), exist_ok=True)  # already exists but safe
+        out_base = os.path.splitext(fp)[0]  # .../metrics/all_metrics
+        plt.savefig(out_base + f"__{slug_metric('KappaT (Temporal)')}.png", dpi=180, bbox_inches="tight")
+        plt.close()
+
 
 # -------- Accuracy / G-Mean / PR-AUC --------
 for fp in files:
