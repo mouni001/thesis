@@ -13,6 +13,7 @@ __pycache__/
 # Ignore IDE settings
 .vscode/
 .idea/
+model/data/
 
 # Ignore OS files
 .DS_Store
