@@ -14,6 +14,9 @@ __pycache__/
 .vscode/
 .idea/
 model/data/
+*.zip
+model.zip
+
 
 # Ignore OS files
 .DS_Store
