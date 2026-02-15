@@ -30,7 +30,11 @@ for variant, by_det in runs.items():
             plt.plot(x, y, linewidth=1.6, label=det.upper())
         plt.title(f"{variant} — {metric}")
         plt.xlabel("Stream progress (%)"); plt.ylabel(metric)
-        plt.ylim(0,1); plt.grid(True, alpha=0.3); plt.legend()
+        if metric in ["kappa", "kappa_m", "kappa_t"]:
+            plt.ylim(-1, 1)
+        else:
+            plt.ylim(0, 1)
+        plt.grid(True, alpha=0.3); plt.legend()
         plt.savefig(os.path.join(outdir, f"{variant}__{metric}.png"), dpi=180, bbox_inches='tight')
         plt.close()
 print(f"[OK] Saved overlays in {outdir}")

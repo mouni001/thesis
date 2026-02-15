@@ -28,7 +28,7 @@ def main():
     optimizer = torch.optim.Adam(model.parameters(), lr=LR)
 
     # 3) Logger
-    logger = StreamMetricLogger()
+    logger = StreamMetricLogger(num_classes=6)
     logger.mark_drift(drift_start)
 
     # 4) Prequential loop (TEST then TRAIN)

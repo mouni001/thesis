@@ -20,8 +20,29 @@ DEFAULT_KEYS = [
 ]
 
 
+def per_class_keys(num_classes: int):
+    keys = []
+    for c in range(int(num_classes)):
+        keys += [f"prec_c{c}", f"rec_c{c}", f"f1_c{c}"]
+    return keys
+
+
 class StreamMetricLogger:
-    def __init__(self, window_keys=DEFAULT_KEYS, use_memory=True):
+    """Lightweight rolling-window metric logger.
+
+    - Keeps your existing DEFAULT_KEYS behavior (so old plots still work).
+    - Optionally adds per-class keys (prec_c*, rec_c*, f1_c*) so you can compare fixed classes.
+    """
+
+    def __init__(self, window_keys=None, num_classes=None, use_memory=True):
+        if window_keys is None:
+            window_keys = list(DEFAULT_KEYS)
+        else:
+            window_keys = list(window_keys)
+
+        if num_classes is not None:
+            window_keys += per_class_keys(int(num_classes))
+
         self.window_keys = list(window_keys)
         self.metrics = {k: [] for k in self.window_keys}
 
@@ -61,6 +82,9 @@ class StreamMetricLogger:
         self._oca_seen += 1
         self._oca_correct += int(y_pred == int(y_true))
         oca_t = self._oca_correct / max(1, self._oca_seen)
+        # Ensure "oca" exists even if user removed it from window_keys
+        if "oca" not in self.metrics:
+            self.metrics["oca"] = []
         self.metrics["oca"].append(float(oca_t))
 
     def end_step(self):
@@ -88,8 +112,9 @@ class StreamMetricLogger:
         out["times"] = np.asarray(self.times, dtype=np.float32)
         out["mems"] = np.asarray(self.mems, dtype=np.float32)
 
-        if len(self.metrics.get("oca", [])) > 0:
-            oca = np.asarray(self.metrics["oca"], dtype=np.float32)
+        # ACR from OCA (uses whatever is in out["oca"])
+        if out.get("oca", np.array([])).size > 0:
+            oca = np.asarray(out["oca"], dtype=np.float32)
             f_star = float(np.nanmax(oca))
             acr = float(np.nanmean(f_star - oca))
         else:

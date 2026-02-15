@@ -107,13 +107,19 @@ class OLD3S_Shallow:
         else:
             self.detector = drift.ADWIN()
 
-        self.logs = {k: [] for k in [
+        base_keys = [
             "accuracy", "kappa", "kappa_m", "kappa_t",
             "prec_min", "rec_min", "f1_min",
             "prec_maj", "rec_maj", "f1_maj",
             "gmean", "pr_auc",
-            "oca", "drift", "times", "mems"
-        ]}
+            "oca", "drift", "times", "mems",
+        ]
+
+        per_cls = []
+        for c in range(int(self.num_classes)):
+            per_cls += [f"prec_c{c}", f"rec_c{c}", f"f1_c{c}"]
+
+        self.logs = {k: [] for k in (base_keys + per_cls)}
         self._all_labels = []
         self._oca_seen = 0
         self._oca_correct = 0
@@ -137,10 +143,16 @@ class OLD3S_Shallow:
 
         row = update_all(y_true, proba)
 
-        for k in ["accuracy", "kappa", "kappa_m", "kappa_t",
-                  "prec_min", "rec_min", "f1_min",
-                  "prec_maj", "rec_maj", "f1_maj",
-                  "gmean", "pr_auc"]:
+        metric_keys = [
+            "accuracy", "kappa", "kappa_m", "kappa_t",
+            "prec_min", "rec_min", "f1_min",
+            "prec_maj", "rec_maj", "f1_maj",
+            "gmean", "pr_auc",
+        ]
+        for c in range(int(self.num_classes)):
+            metric_keys += [f"prec_c{c}", f"rec_c{c}", f"f1_c{c}"]
+
+        for k in metric_keys:
             self.logs[k].append(float(row.get(k, np.nan)))
 
         # prefer evaluator's prediction
@@ -218,7 +230,9 @@ class OLD3S_Shallow:
         Runs T1 steps: first B from S1, then t from S2 (indexed by j=i-B).
         """
         print(f"[INFO] T1={self.T1}, t={self.t}, B={self.B}, num_classes={self.num_classes}")
+
         os.makedirs(f"./data/{self.path}", exist_ok=True)
+        os.makedirs(f"./data/{self.path}/metrics", exist_ok=True)
 
         classifier_1 = MLP(self.dimension2, self.num_classes).to(self.device)
         opt_c1 = torch.optim.Adam(classifier_1.parameters(), self.lr)

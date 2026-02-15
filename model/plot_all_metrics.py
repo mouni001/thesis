@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from glob import glob
 import os
+import re
 from collections import deque
 
 # Find ALL runs (adwin, mddm, etc.) under data/
@@ -87,6 +88,54 @@ def baselines_from_labels(y):
             counts = np.bincount(np.array(hist), minlength=2)
             maj_acc[i] = counts.max()/len(hist)
     return maj_acc, no_change
+
+
+def parse_pair_from_run_dir(run_dir_name: str):
+    """Extract (a,b) from a folder name like: parameter_insects__<csv>__pair_2vs5__adwin"""
+    m = re.search(r"__pair_(\d+)vs(\d+)__", run_dir_name)
+    if not m:
+        return None
+    return int(m.group(1)), int(m.group(2))
+
+
+# -------- pair plots (class A vs class B) --------
+for fp in files:
+    data = np.load(fp)
+    run_dir = os.path.basename(os.path.dirname(os.path.dirname(fp)))
+    pair = parse_pair_from_run_dir(run_dir)
+    if pair is None:
+        continue
+
+    a, b = pair
+    # In train.py we relabel: class_a -> 0, class_b -> 1
+    needed = ("rec_c0", "rec_c1", "prec_c0", "prec_c1", "f1_c0", "f1_c1")
+    if not all(k in data.files for k in needed):
+        continue
+
+    n = len(data["rec_c0"])
+    x_pct = np.linspace(0, 100, n)
+    drift_idx = data["drift"] if "drift" in data.files else None
+    label = detector_label_from_path(fp)
+
+    for metric_name, y0_key, y1_key, ylab in [
+        ("Recall", "rec_c0", "rec_c1", "Recall"),
+        ("Precision", "prec_c0", "prec_c1", "Precision"),
+        ("F1", "f1_c0", "f1_c1", "F1"),
+    ]:
+        fig, ax = plt.subplots(figsize=(10, 5))
+        ax.plot(x_pct, smooth(data[y0_key], k=0.01), label=f"{label} – Class {a}", linewidth=1.8)
+        ax.plot(x_pct, smooth(data[y1_key], k=0.01), label=f"{label} – Class {b}", linestyle="--", linewidth=1.8)
+        plot_drift(ax, drift_idx, n)
+        ax.set_xlabel("Stream progress (%)")
+        ax.set_ylabel(ylab)
+        ax.set_title(f"Prequential {metric_name} (Pair {a} vs {b})")
+        ax.set_ylim(0, 1)
+        ax.grid(True, alpha=0.3)
+        ax.legend()
+
+        out_base = os.path.splitext(fp)[0]
+        plt.savefig(out_base + f"__{slug_metric(f'Pair {a} vs {b} {metric_name}')}.png", dpi=180, bbox_inches="tight")
+        plt.close()
 
 # -------- pair plots (min vs maj) --------
 for fp in files:
