@@ -75,7 +75,7 @@ def main():
         # hard safety check
         assert int(torch.unique(torch.cat([y_S1, y_S2])).numel()) == 2
 
-        # ✅ unique output folder per pair (prevents overwriting results)
+        # unique output folder per pair (prevents overwriting results)
         csv_stem = os.path.splitext(os.path.basename(args.insects_csv))[0]
         path = f"parameter_insects__{csv_stem}__pair_{a}vs{b}__adwin"
         print(f"[INFO] Output path set to: {path}")

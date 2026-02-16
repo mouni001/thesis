@@ -1,13 +1,14 @@
-import numpy as np
+﻿import numpy as np
+import re
 import matplotlib.pyplot as plt
 from glob import glob
 import os
-import re
 from collections import deque
 
 # Find ALL runs (adwin, mddm, etc.) under data/
 # files = glob('./data/**/metrics/all_metrics.npz', recursive=True)
 files = glob('./data/parameter_insects*/metrics/all_metrics.npz')
+CLASS_METRIC_TO_PLOT = 'rec'  # choose one: 'rec', 'prec', or 'f1'
 
 
 def detector_label_from_path(fp: str) -> str:
@@ -89,75 +90,6 @@ def baselines_from_labels(y):
             maj_acc[i] = counts.max()/len(hist)
     return maj_acc, no_change
 
-
-def parse_pair_from_run_dir(run_dir_name: str):
-    """Extract (a,b) from a folder name like: parameter_insects__<csv>__pair_2vs5__adwin"""
-    m = re.search(r"__pair_(\d+)vs(\d+)__", run_dir_name)
-    if not m:
-        return None
-    return int(m.group(1)), int(m.group(2))
-
-
-# -------- pair plots (class A vs class B) --------
-for fp in files:
-    data = np.load(fp)
-    run_dir = os.path.basename(os.path.dirname(os.path.dirname(fp)))
-    pair = parse_pair_from_run_dir(run_dir)
-    if pair is None:
-        continue
-
-    a, b = pair
-    # In train.py we relabel: class_a -> 0, class_b -> 1
-    needed = ("rec_c0", "rec_c1", "prec_c0", "prec_c1", "f1_c0", "f1_c1")
-    if not all(k in data.files for k in needed):
-        continue
-
-    n = len(data["rec_c0"])
-    x_pct = np.linspace(0, 100, n)
-    drift_idx = data["drift"] if "drift" in data.files else None
-    label = detector_label_from_path(fp)
-
-    for metric_name, y0_key, y1_key, ylab in [
-        ("Recall", "rec_c0", "rec_c1", "Recall"),
-        ("Precision", "prec_c0", "prec_c1", "Precision"),
-        ("F1", "f1_c0", "f1_c1", "F1"),
-    ]:
-        fig, ax = plt.subplots(figsize=(10, 5))
-        ax.plot(x_pct, smooth(data[y0_key], k=0.01), label=f"{label} – Class {a}", linewidth=1.8)
-        ax.plot(x_pct, smooth(data[y1_key], k=0.01), label=f"{label} – Class {b}", linestyle="--", linewidth=1.8)
-        plot_drift(ax, drift_idx, n)
-        ax.set_xlabel("Stream progress (%)")
-        ax.set_ylabel(ylab)
-        ax.set_title(f"Prequential {metric_name} (Pair {a} vs {b})")
-        ax.set_ylim(0, 1)
-        ax.grid(True, alpha=0.3)
-        ax.legend()
-
-        out_base = os.path.splitext(fp)[0]
-        plt.savefig(out_base + f"__{slug_metric(f'Pair {a} vs {b} {metric_name}')}.png", dpi=180, bbox_inches="tight")
-        plt.close()
-
-# -------- pair plots (min vs maj) --------
-for fp in files:
-    data = np.load(fp); label = detector_label_from_path(fp)
-    if not all(k in data.files for k in ("rec_min","rec_maj")): continue
-    n = len(data["rec_min"]); x_pct = np.linspace(0,100,n)
-    drift_idx = data["drift"] if "drift" in data.files else None
-
-    fig, ax = plt.subplots(figsize=(10,5))
-    ax.plot(x_pct, smooth(data["rec_min"], k=0.01), label=f"{label} – Recall (Minority)", linewidth=1.8)
-    ax.plot(x_pct, smooth(data["rec_maj"], k=0.01), label=f"{label} – Recall (Majority)", linestyle="--", linewidth=1.8)
-    plot_drift(ax, drift_idx, n)
-    ax.set_xlabel("Stream progress (%)"); ax.set_ylabel("Recall")
-    ax.set_title("Prequential Recall (Minority vs Majority)"); ax.set_ylim(0,1); ax.grid(True, alpha=0.3); ax.legend()
-    # plt.show()
-
-    os.makedirs(os.path.dirname(fp), exist_ok=True)  # already exists but safe
-    out_base = os.path.splitext(fp)[0]  # .../metrics/all_metrics
-    plt.savefig(out_base + f"__{slug_metric('Minority vs Majority')}.png", dpi=180, bbox_inches="tight")
-    plt.close()
-
-
 # -------- KappaM / KappaT --------
 for fp in files:
     data = np.load(fp); label = detector_label_from_path(fp)
@@ -165,7 +97,7 @@ for fp in files:
         km = data["kappa_m"].astype(float); n = len(km); x_pct = np.linspace(0,100,n)
         drift_idx = data["drift"] if "drift" in data.files else None
         fig, ax = plt.subplots(figsize=(10,5))
-        ax.plot(x_pct, smooth_preserve_nans(km, k=0.01), label=f"{label} – KappaM", linewidth=1.8)
+        ax.plot(x_pct, smooth_preserve_nans(km, k=0.01), label=f"{label} â€“ KappaM", linewidth=1.8)
         ax.axhline(0.0, color="gray", linestyle=":", alpha=0.8, label="Baseline (0)")
         plot_drift(ax, drift_idx, n)
         ax.set_xlabel("Stream progress (%)"); ax.set_ylabel("KappaM")
@@ -181,7 +113,7 @@ for fp in files:
         kt = data["kappa_t"].astype(float); n = len(kt); x_pct = np.linspace(0,100,n)
         drift_idx = data["drift"] if "drift" in data.files else None
         fig, ax = plt.subplots(figsize=(10,5))
-        ax.plot(x_pct, smooth(kt, k=0.01), label=f"{label} – KappaT", linewidth=1.8)
+        ax.plot(x_pct, smooth(kt, k=0.01), label=f"{label} â€“ KappaT", linewidth=1.8)
         ax.axhline(0.0, color="gray", linestyle=":", alpha=0.8, label="Baseline (0)")
         plot_drift(ax, drift_idx, n)
         ax.set_xlabel("Stream progress (%)"); ax.set_ylabel("KappaT")
@@ -228,25 +160,56 @@ for fp in files:
         ax.set_xlabel("Stream progress (%)"); ax.set_ylabel("PR-AUC")
         ax.set_title("Prequential PR-AUC (Sliding Window)"); ax.grid(True, alpha=0.3); ax.legend()
         plt.show()
-
-# -------- OCA (cumulative) --------
+# -------- Per-class ALL metrics (rec/prec/f1) --------
 for fp in files:
-    data = np.load(fp); label = detector_label_from_path(fp)
-    if 'oca' not in data.files and 'accuracy' not in data.files:
+    data = np.load(fp)
+    label = detector_label_from_path(fp)
+
+    # Discover per-class keys
+    per_class = {"rec": [], "prec": [], "f1": []}
+    for k in data.files:
+        m = re.match(r"^(rec|prec|f1)_c(\d+)$", k)
+        if m:
+            per_class[m.group(1)].append(int(m.group(2)))
+
+    # Nothing to do if no per-class keys exist
+    if all(len(v) == 0 for v in per_class.values()):
         continue
-    if 'oca' in data.files:
-        oca = data['oca'].astype(float); n = len(oca); x = np.arange(1, n+1)
-        fig, ax = plt.subplots(figsize=(6,4))
-        ax.plot(x, oca, linewidth=1.4, label=label)
-        ax.set_xlabel("# of instances"); ax.set_ylabel("OCA")
-        ax.set_title("Overall Classification Accuracy (cumulative)")
-        ax.set_ylim(0,1); ax.grid(True, alpha=0.3); ax.legend()
-        plt.show()
-    else:
-        acc = data['accuracy'].astype(float); n = len(acc); x = np.arange(1, n+1)
-        fig, ax = plt.subplots(figsize=(6,4))
-        ax.plot(x, acc, linewidth=1.4, label=label)
-        ax.set_xlabel("# of instances"); ax.set_ylabel("OCA (sliding proxy)")
-        ax.set_title("Overall Classification Accuracy (sliding)")
-        ax.set_ylim(0,1); ax.grid(True, alpha=0.3); ax.legend()
-        plt.show()
+
+    drift_idx = data["drift"] if "drift" in data.files else None
+
+    title_map = {"rec": "Prequential Recall", "prec": "Prequential Precision", "f1": "Prequential F1"}
+    ylabel_map = {"rec": "Recall", "prec": "Precision", "f1": "F1-score"}
+
+    out_base = os.path.splitext(fp)[0]  # .../metrics/all_metrics
+
+    for fam in ("rec", "prec", "f1"):
+        classes = sorted(set(per_class[fam]))
+        if not classes:
+            continue
+
+        n = len(data[f"{fam}_c{classes[0]}"])
+        x_pct = np.linspace(0, 100, n)
+
+        fig, ax = plt.subplots(figsize=(10, 5))
+        for c in classes:
+            y = data.get(f"{fam}_c{c}", None)
+            if y is None:
+                continue
+            ax.plot(x_pct, smooth_preserve_nans(y.astype(float), k=0.01),
+                    label=f"Class {c}", linewidth=1.6)
+
+        plot_drift(ax, drift_idx, n)
+        ax.set_xlabel("Stream progress (%)")
+        ax.set_ylabel(ylabel_map[fam])
+        ax.set_title(f"{title_map[fam]} (per class) - {label}")
+        ax.set_ylim(0, 1)
+        ax.grid(True, alpha=0.3)
+
+        if len(classes) <= 8:
+            ax.legend()
+        else:
+            ax.legend(fontsize=8, ncol=2)
+
+        plt.savefig(out_base + f"__{fam}_per_class.png", dpi=180, bbox_inches="tight")
+        plt.close()
