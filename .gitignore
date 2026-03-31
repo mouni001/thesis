@@ -10,11 +10,13 @@ __pycache__/
 *.mat
 *.pth
 *.png
+* .model/data
 # Ignore IDE settings
 .vscode/
 .idea/
 *.zip
 model.zip
+
 
 
 # Ignore OS files

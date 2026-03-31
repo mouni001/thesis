@@ -1,215 +1,334 @@
-﻿import numpy as np
-import re
-import matplotlib.pyplot as plt
-from glob import glob
 import os
-from collections import deque
+import re
+from glob import glob
 
-# Find ALL runs (adwin, mddm, etc.) under data/
-# files = glob('./data/**/metrics/all_metrics.npz', recursive=True)
-files = glob('./data/parameter_insects*/metrics/all_metrics.npz')
-CLASS_METRIC_TO_PLOT = 'rec'  # choose one: 'rec', 'prec', or 'f1'
+import matplotlib.pyplot as plt
+import numpy as np
+
+
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.join(SCRIPT_DIR, "data")
+OUT_DIR = os.path.join(DATA_DIR, "combined_plots")
+os.makedirs(OUT_DIR, exist_ok=True)
+
+RUN_ORDER = {
+    "Adaptive": 0,
+    "No-Change": 1,
+    "Global Majority": 2,
+    "Cumulative Majority": 3,
+}
+
+RUN_STYLES = {
+    "Adaptive": {"linewidth": 2.4, "color": "#0B6E4F"},
+    "No-Change": {"linewidth": 2.2, "color": "#C84C09", "linestyle": "-."},
+    "Global Majority": {"linewidth": 2.4, "linestyle": "--", "color": "#7B2CBF"},
+    "Cumulative Majority": {"linewidth": 2.4, "linestyle": ":", "color": "#1D4ED8"},
+}
+
+CLASS_COLORS = [
+    "#E41A1C",
+    "#377EB8",
+    "#4DAF4A",
+    "#FF7F00",
+    "#984EA3",
+    "#A65628",
+    "#F781BF",
+    "#000000",
+]
+
+BASIC_RUN_DIRS = {
+    "parameter_insects__INSECTS_incremental_imbalanced",
+    "parameter_insects__INSECTS_incremental_imbalanced__nochange",
+    "parameter_insects__INSECTS_incremental_imbalanced__global_majority",
+    "parameter_insects__INSECTS_incremental_imbalanced__cumulative_majority",
+}
 
 
 def detector_label_from_path(fp: str) -> str:
-    """Return a friendly run label based on the parent folder name."""
-    run_dir = os.path.basename(os.path.dirname(os.path.dirname(fp)))  # e.g., parameter_insects_mddm_g
-    # make a clean, short label:
-    name = run_dir.replace('parameter_', '')
-    # optional: map to super short names
-    if 'mddm' in name.lower(): return 'MDDM_G'
-    if 'adwin' in name.lower(): return 'ADWIN'
-    return name  # fallback: insects, insects_run2, etc.
+    run_dir = os.path.basename(os.path.dirname(os.path.dirname(fp)))
+    lower = run_dir.lower()
 
-metrics_to_plot = [
-    'accuracy', 'oca', 'kappa', 'kappa_m', 'kappa_t',
-    'gmean', 'f1_min', 'pr_auc',
-    'rec_min', 'prec_min', 'prec_maj', 'rec_maj', 'f1_maj'
-]
+    if "nochange" in lower or "no_change" in lower:
+        return "No-Change"
+    if "global_majority" in lower:
+        return "Global Majority"
+    if "cumulative_majority" in lower:
+        return "Cumulative Majority"
+    if "mddm" in lower:
+        return "MDDM"
+    if lower == "parameter_insects" or lower.endswith("__adwin") or "adaptive" in lower or "adwin" in lower:
+        return "Adaptive"
+    if lower.startswith("parameter_insects__"):
+        return "Adaptive"
 
-pretty = {
-    'accuracy':'Prequential Accuracy',
-    'kappa':"Cohen's Kappa",
-    'kappa_m':'KappaM (vs Majority)',
-    'kappa_t':'KappaT (Temporal)',
-    'gmean':'G-Mean',
-    'f1_min':'F1 (Minority)',
-    'pr_auc':'PR-AUC (windowed)',
-    'rec_min':'Recall (Minority)',
-    'prec_min':'Precision (Minority)',
-    'prec_maj':'Precision (Majority)',
-    'rec_maj':'Recall (Majority)',
-    'f1_maj':'F1 (Majority)',
-    'oca':'Overall Classification Accuracy (Cumulative)',
-}
-def slug_metric(name: str) -> str:
-    return name.lower().replace(" ", "_").replace("(", "").replace(")", "").replace("-", "")
+    label = run_dir.replace("parameter_insects_", "").replace("parameter_", "")
+    return label or run_dir
 
-def smooth(y, k=0.02):
-    if len(y) < 5:
+
+def run_sort_key(item):
+    label, _, fp = item
+    return (RUN_ORDER.get(label, 99), label.lower(), fp.lower())
+
+
+def smooth_preserve_nans(y, k=0.01):
+    y = np.asarray(y, dtype=float)
+    n = len(y)
+    if n < 5:
         return y
-    win = max(5, int(len(y)*k) | 1)
-    kernel = np.ones(win)/win
-    y2 = np.array(y, dtype=float)
-    if np.isnan(y2).any():
-        n = len(y2); x = np.arange(n); mask = ~np.isnan(y2)
-        y2 = np.interp(x, x[mask], y2[mask]) if mask.sum() >= 2 else np.nan_to_num(y2, nan=0.0)
-    pad = win // 2
-    ypad = np.pad(y2, (pad, pad), mode='reflect')
-    return np.convolve(ypad, kernel, mode='valid')
 
-def smooth_preserve_nans(y, k=0.02):
-    y = np.asarray(y, float); n = len(y)
-    if n < 5: return y
-    win = max(5, int(n*k) | 1)
-    w = np.ones(win)
+    win = max(5, int(n * k) | 1)
     vals = np.where(np.isnan(y), 0.0, y)
-    cnts = np.convolve(~np.isnan(y), w, 'same')
-    sm   = np.convolve(vals, w, 'same')
-    out = sm / np.maximum(cnts, 1)
-    out[cnts < 1] = np.nan
+    mask = (~np.isnan(y)).astype(float)
+
+    sm_vals = np.convolve(vals, np.ones(win), mode="same")
+    sm_mask = np.convolve(mask, np.ones(win), mode="same")
+
+    out = sm_vals / np.maximum(sm_mask, 1.0)
+    out[sm_mask == 0] = np.nan
     return out
 
+
 def plot_drift(ax, drift_idx, n):
-    if drift_idx is None: return
-    for d in np.atleast_1d(drift_idx):
+    if drift_idx is None:
+        return
+
+    drift_idx = np.atleast_1d(drift_idx)
+    for d in drift_idx:
+        d = int(d)
         if 0 <= d < n:
-            x_pct = d / (n-1) * 100.0
-            ax.axvline(x_pct, ls='--', alpha=0.25)
-
-def baselines_from_labels(y):
-    y = y.astype(int); n = len(y)
-    W = max(100, n // 50)
-    maj_acc = np.full(n, np.nan); no_change = np.full(n, np.nan)
-    hist = deque(maxlen=W)
-    for i in range(n):
-        if i > 0: no_change[i] = float(y[i] == y[i-1])
-        hist.append(y[i])
-        if len(hist) > 1:
-            counts = np.bincount(np.array(hist), minlength=2)
-            maj_acc[i] = counts.max()/len(hist)
-    return maj_acc, no_change
-
-# -------- KappaM / KappaT --------
-for fp in files:
-    data = np.load(fp); label = detector_label_from_path(fp)
-    if "kappa_m" in data.files:
-        km = data["kappa_m"].astype(float); n = len(km); x_pct = np.linspace(0,100,n)
-        drift_idx = data["drift"] if "drift" in data.files else None
-        fig, ax = plt.subplots(figsize=(10,5))
-        ax.plot(x_pct, smooth_preserve_nans(km, k=0.01), label=f"{label} â€“ KappaM", linewidth=1.8)
-        ax.axhline(0.0, color="gray", linestyle=":", alpha=0.8, label="Baseline (0)")
-        plot_drift(ax, drift_idx, n)
-        ax.set_xlabel("Stream progress (%)"); ax.set_ylabel("KappaM")
-        ax.set_title("KappaM (vs Majority)"); ax.set_ylim(-0.1,1.0); ax.grid(True, alpha=0.3); ax.legend()
-        # plt.show()
-        os.makedirs(os.path.dirname(fp), exist_ok=True)  # already exists but safe
-        out_base = os.path.splitext(fp)[0]  # .../metrics/all_metrics
-        plt.savefig(out_base + f"__{slug_metric('KappaM (vs Majority)')}.png", dpi=180, bbox_inches="tight")
-        plt.close()
+            x_pct = d / max(n - 1, 1) * 100.0
+            ax.axvline(x_pct, linestyle="--", alpha=0.25, color="gray")
 
 
-    if "kappa_t" in data.files:
-        kt = data["kappa_t"].astype(float); n = len(kt); x_pct = np.linspace(0,100,n)
-        drift_idx = data["drift"] if "drift" in data.files else None
-        fig, ax = plt.subplots(figsize=(10,5))
-        ax.plot(x_pct, smooth(kt, k=0.01), label=f"{label} â€“ KappaT", linewidth=1.8)
-        ax.axhline(0.0, color="gray", linestyle=":", alpha=0.8, label="Baseline (0)")
-        plot_drift(ax, drift_idx, n)
-        ax.set_xlabel("Stream progress (%)"); ax.set_ylabel("KappaT")
-        ax.set_title("KappaT (Temporal)"); ax.set_ylim(-0.1,1.0); ax.grid(True, alpha=0.3); ax.legend()
-        # plt.show()
+def finalize_axis(fig, ax, title, ylabel, ylim=None, legend_columns=1):
+    ax.set_xlabel("Stream progress (%)")
+    ax.set_ylabel(ylabel)
+    ax.set_title(title)
+    if ylim is not None:
+        ax.set_ylim(*ylim)
+    ax.set_xlim(0, 100)
+    ax.grid(True, alpha=0.3)
 
-        os.makedirs(os.path.dirname(fp), exist_ok=True)  # already exists but safe
-        out_base = os.path.splitext(fp)[0]  # .../metrics/all_metrics
-        plt.savefig(out_base + f"__{slug_metric('KappaT (Temporal)')}.png", dpi=180, bbox_inches="tight")
-        plt.close()
+    handles, labels = ax.get_legend_handles_labels()
+    if handles:
+        ax.legend(
+            handles,
+            labels,
+            loc="upper center",
+            bbox_to_anchor=(0.5, -0.14),
+            ncol=legend_columns,
+            frameon=False,
+            fontsize=9,
+        )
+
+    fig.tight_layout(rect=(0, 0.06, 1, 1))
 
 
-# -------- Accuracy / G-Mean / PR-AUC --------
-for fp in files:
-    data = np.load(fp); label = detector_label_from_path(fp)
-    n = len(data["accuracy"]); x_pct = np.linspace(0,100,n)
-    drift_idx = data["drift"] if "drift" in data.files else None
+def save_fig(fig, out_name):
+    fig.savefig(os.path.join(OUT_DIR, out_name), dpi=180, bbox_inches="tight")
+    plt.close(fig)
 
-    # Accuracy
-    fig, ax = plt.subplots(figsize=(10,5))
-    ax.plot(x_pct, smooth(data["accuracy"], k=0.01), label=label, linewidth=1.8)
-    if "y_true" in data.files:
-        maj, noc = baselines_from_labels(data["y_true"])
-        ax.plot(x_pct, smooth(maj, k=0.02), ls=":",  alpha=0.8, label="Majority baseline")
-        ax.plot(x_pct, smooth(noc, k=0.02), ls="--", alpha=0.8, label="No-Change baseline")
-    plot_drift(ax, drift_idx, n)
-    ax.set_xlabel("Stream progress (%)"); ax.set_ylabel("Accuracy")
-    ax.set_title("Prequential Accuracy (Sliding Window)"); ax.set_ylim(0,1); ax.grid(True, alpha=0.3); ax.legend()
-    plt.show()
 
-    # G-Mean
-    fig, ax = plt.subplots(figsize=(10,5))
-    ax.plot(x_pct, smooth(data["gmean"], k=0.01), label=label, linewidth=1.8)
-    plot_drift(ax, drift_idx, n)
-    ax.set_xlabel("Stream progress (%)"); ax.set_ylabel("G-Mean")
-    ax.set_title("Prequential G-Mean (Sliding Window)"); ax.set_ylim(0,1); ax.grid(True, alpha=0.3); ax.legend()
-    plt.show()
+def style_for_label(label):
+    return dict(RUN_STYLES.get(label, {"linewidth": 1.8}))
 
-    # PR-AUC
-    if "pr_auc" in data.files:
-        fig, ax = plt.subplots(figsize=(10,5))
-        ax.plot(x_pct, smooth(data["pr_auc"], k=0.02), label=label, linewidth=1.8)
-        plot_drift(ax, drift_idx, n)
-        ax.set_xlabel("Stream progress (%)"); ax.set_ylabel("PR-AUC")
-        ax.set_title("Prequential PR-AUC (Sliding Window)"); ax.grid(True, alpha=0.3); ax.legend()
-        plt.show()
-# -------- Per-class ALL metrics (rec/prec/f1) --------
-for fp in files:
-    data = np.load(fp)
+
+def color_for_class(class_id: int) -> str:
+    return CLASS_COLORS[int(class_id) % len(CLASS_COLORS)]
+
+
+def discover_basic_run_files():
+    files = []
+    for run_dir in sorted(BASIC_RUN_DIRS):
+        fp = os.path.join(DATA_DIR, run_dir, "metrics", "all_metrics.npz")
+        if os.path.exists(fp):
+            files.append(fp)
+    return files
+
+
+all_runs = []
+for fp in discover_basic_run_files():
+    data = np.load(fp, allow_pickle=True)
     label = detector_label_from_path(fp)
+    all_runs.append((label, data, fp))
 
-    # Discover per-class keys
-    per_class = {"rec": [], "prec": [], "f1": []}
-    for k in data.files:
-        m = re.match(r"^(rec|prec|f1)_c(\d+)$", k)
-        if m:
-            per_class[m.group(1)].append(int(m.group(2)))
+all_runs.sort(key=run_sort_key)
 
-    # Nothing to do if no per-class keys exist
-    if all(len(v) == 0 for v in per_class.values()):
+if not all_runs:
+    print(f"No all_metrics.npz files found under: {DATA_DIR}")
+    raise SystemExit
+
+
+metric_info = {
+    "accuracy": ("Prequential Accuracy", "Accuracy", (0, 1)),
+    "oca": ("Overall Classification Accuracy (Cumulative)", "OCA", (0, 1)),
+    "acr_curve": ("Average Cumulative Regret", "ACR", (0, 1)),
+    "loss": ("Online Loss", "Loss", None),
+    "cum_loss": ("Cumulative Loss", "Cumulative Loss", None),
+    "avg_cum_loss": ("Average Cumulative Loss", "Avg Cumulative Loss", None),
+    "kappa": ("Cohen's Kappa", "Kappa", (-0.1, 1)),
+    "kappa_m": ("KappaM (vs Majority)", "KappaM", (-0.1, 1)),
+    "kappa_t": ("KappaT (Temporal)", "KappaT", (-0.1, 1)),
+    "gmean": ("Prequential G-Mean", "G-Mean", (0, 1)),
+    "pr_auc": ("Prequential PR-AUC", "PR-AUC", (0, 1)),
+    "f1_min": ("Minority F1", "F1", (0, 1)),
+    "prec_min": ("Minority Precision", "Precision", (0, 1)),
+    "rec_min": ("Minority Recall", "Recall", (0, 1)),
+    "f1_maj": ("Majority F1", "F1", (0, 1)),
+    "prec_maj": ("Majority Precision", "Precision", (0, 1)),
+    "rec_maj": ("Majority Recall", "Recall", (0, 1)),
+}
+
+for metric, (title, ylabel, ylim) in metric_info.items():
+    available = [(label, data, fp) for (label, data, fp) in all_runs if metric in data.files]
+    if not available:
         continue
 
-    drift_idx = data["drift"] if "drift" in data.files else None
+    n = min(len(data[metric]) for (_, data, _) in available)
+    x_pct = np.linspace(0, 100, n)
 
-    title_map = {"rec": "Prequential Recall", "prec": "Prequential Precision", "f1": "Prequential F1"}
-    ylabel_map = {"rec": "Recall", "prec": "Precision", "f1": "F1-score"}
+    fig, ax = plt.subplots(figsize=(11, 6))
+    drift_drawn = False
 
-    out_base = os.path.splitext(fp)[0]  # .../metrics/all_metrics
+    for label, data, _ in available:
+        y = smooth_preserve_nans(data[metric][:n].astype(float), k=0.01)
+        ax.plot(x_pct, y, label=label, **style_for_label(label))
 
-    for fam in ("rec", "prec", "f1"):
-        classes = sorted(set(per_class[fam]))
-        if not classes:
+        if not drift_drawn and "drift" in data.files:
+            plot_drift(ax, data["drift"], n)
+            drift_drawn = True
+
+    if metric in ("kappa_m", "kappa_t"):
+        ax.axhline(0.0, color="gray", linestyle=":", alpha=0.8)
+
+    finalize_axis(fig, ax, title=title, ylabel=ylabel, ylim=ylim, legend_columns=min(2, len(available)))
+    save_fig(fig, f"{metric}_combined.png")
+
+
+families = ["rec", "prec", "f1"]
+title_map = {
+    "rec": "Recall - All Classes / All Runs",
+    "prec": "Precision - All Classes / All Runs",
+    "f1": "F1 - All Classes / All Runs",
+}
+ylabel_map = {
+    "rec": "Recall",
+    "prec": "Precision",
+    "f1": "F1-score",
+}
+
+for fam in families:
+    all_classes = set()
+    for _, data, _ in all_runs:
+        for key in data.files:
+            match = re.match(rf"^{fam}_c(\d+)$", key)
+            if match:
+                all_classes.add(int(match.group(1)))
+
+    if not all_classes:
+        continue
+
+    arrays = []
+    for _, data, _ in all_runs:
+        for c in sorted(all_classes):
+            key = f"{fam}_c{c}"
+            if key in data.files:
+                arrays.append(data[key])
+
+    if not arrays:
+        continue
+
+    n = min(len(a) for a in arrays)
+    x_pct = np.linspace(0, 100, n)
+
+    fig, ax = plt.subplots(figsize=(13, 7))
+    drift_drawn = False
+
+    for label, data, _ in all_runs:
+        lower_label = label.lower()
+        class_curves = []
+        class_ids_present = []
+
+        for c in sorted(all_classes):
+            key = f"{fam}_c{c}"
+            if key not in data.files:
+                continue
+            y = smooth_preserve_nans(data[key][:n].astype(float), k=0.01)
+            class_curves.append(y)
+            class_ids_present.append(c)
+
+        if not class_curves:
             continue
 
-        n = len(data[f"{fam}_c{classes[0]}"])
+        if "global majority" in lower_label or "cumulative majority" in lower_label:
+            macro_y = np.nanmean(np.vstack(class_curves), axis=0)
+            ax.plot(x_pct, macro_y, label=label, **style_for_label(label))
+        else:
+            base_style = style_for_label(label)
+            for y, c in zip(class_curves, class_ids_present):
+                ax.plot(
+                    x_pct,
+                    y,
+                    label=f"{label} - Class {c}",
+                    linewidth=base_style.get("linewidth", 1.8),
+                    linestyle=base_style.get("linestyle", "-"),
+                    color=color_for_class(c),
+                    alpha=0.95,
+                )
+
+        if not drift_drawn and "drift" in data.files:
+            plot_drift(ax, data["drift"], n)
+            drift_drawn = True
+
+    finalize_axis(
+        fig,
+        ax,
+        title=title_map[fam],
+        ylabel=ylabel_map[fam],
+        ylim=(0, 1),
+        legend_columns=2,
+    )
+    save_fig(fig, f"{fam}_all_classes_all_runs.png")
+
+
+for fam in families:
+    all_classes = set()
+    for _, data, _ in all_runs:
+        for key in data.files:
+            match = re.match(rf"^{fam}_c(\d+)$", key)
+            if match:
+                all_classes.add(int(match.group(1)))
+
+    for c in sorted(all_classes):
+        key = f"{fam}_c{c}"
+        available = [(label, data, fp) for (label, data, fp) in all_runs if key in data.files]
+        if not available:
+            continue
+
+        n = min(len(data[key]) for (_, data, _) in available)
         x_pct = np.linspace(0, 100, n)
 
-        fig, ax = plt.subplots(figsize=(10, 5))
-        for c in classes:
-            y = data.get(f"{fam}_c{c}", None)
-            if y is None:
-                continue
-            ax.plot(x_pct, smooth_preserve_nans(y.astype(float), k=0.01),
-                    label=f"Class {c}", linewidth=1.6)
+        fig, ax = plt.subplots(figsize=(11, 6))
+        drift_drawn = False
 
-        plot_drift(ax, drift_idx, n)
-        ax.set_xlabel("Stream progress (%)")
-        ax.set_ylabel(ylabel_map[fam])
-        ax.set_title(f"{title_map[fam]} (per class) - {label}")
-        ax.set_ylim(0, 1)
-        ax.grid(True, alpha=0.3)
+        for label, data, _ in available:
+            y = smooth_preserve_nans(data[key][:n].astype(float), k=0.01)
+            ax.plot(x_pct, y, label=label, **style_for_label(label))
 
-        if len(classes) <= 8:
-            ax.legend()
-        else:
-            ax.legend(fontsize=8, ncol=2)
+            if not drift_drawn and "drift" in data.files:
+                plot_drift(ax, data["drift"], n)
+                drift_drawn = True
 
-        plt.savefig(out_base + f"__{fam}_per_class.png", dpi=180, bbox_inches="tight")
-        plt.close()
+        fam_name = {"rec": "Recall", "prec": "Precision", "f1": "F1"}[fam]
+        finalize_axis(
+            fig,
+            ax,
+            title=f"{fam_name} - Class {c}",
+            ylabel=ylabel_map[fam],
+            ylim=(0, 1),
+            legend_columns=min(2, len(available)),
+        )
+        save_fig(fig, f"{fam}_class_{c}_combined.png")
+
+
+print(f"[OK] Combined plots saved in: {OUT_DIR}")

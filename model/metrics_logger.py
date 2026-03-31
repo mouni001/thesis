@@ -1,6 +1,7 @@
 import os
 import time
 import numpy as np
+from typing import Optional
 
 try:
     import tracemalloc
@@ -16,8 +17,29 @@ DEFAULT_KEYS = [
     "prec_min", "rec_min", "f1_min",
     "prec_maj", "rec_maj", "f1_maj",
     "gmean", "pr_auc",
+    "loss", "cum_loss", "avg_cum_loss",
     "oca",
 ]
+
+
+def compute_acr_outputs(oca_values):
+    oca = np.asarray(oca_values, dtype=np.float32)
+    if oca.size == 0:
+        return np.asarray([], dtype=np.float32), float("nan")
+
+    finite_oca = np.where(np.isfinite(oca), oca, -np.inf)
+    f_star_curve = np.maximum.accumulate(finite_oca)
+    regret_curve = f_star_curve - oca
+    regret_curve = np.where(np.isfinite(regret_curve), regret_curve, np.nan)
+
+    valid = np.isfinite(regret_curve).astype(np.float32)
+    regret_sum = np.cumsum(np.where(np.isfinite(regret_curve), regret_curve, 0.0), dtype=np.float64)
+    valid_count = np.cumsum(valid, dtype=np.float64)
+    acr_curve = regret_sum / np.maximum(valid_count, 1.0)
+    acr_curve[valid_count == 0] = np.nan
+
+    final_acr = float(acr_curve[-1]) if acr_curve.size > 0 else float("nan")
+    return np.asarray(acr_curve, dtype=np.float32), final_acr
 
 
 def per_class_keys(num_classes: int):
@@ -50,6 +72,7 @@ class StreamMetricLogger:
         self.drift_idx = []
         self.times = []
         self.mems = []
+        self.metadata = {}
 
         self._use_mem = bool(use_memory and _TRACEMALLOC)
         if self._use_mem:
@@ -57,9 +80,6 @@ class StreamMetricLogger:
                 tracemalloc.start()
             except Exception:
                 self._use_mem = False
-
-        self._oca_seen = 0
-        self._oca_correct = 0
 
     def start_step(self):
         self._step_t = time.time()
@@ -79,13 +99,10 @@ class StreamMetricLogger:
         else:
             y_pred = int(np.argmax(np.asarray(y_proba)))
 
-        self._oca_seen += 1
-        self._oca_correct += int(y_pred == int(y_true))
-        oca_t = self._oca_correct / max(1, self._oca_seen)
         # Ensure "oca" exists even if user removed it from window_keys
         if "oca" not in self.metrics:
             self.metrics["oca"] = []
-        self.metrics["oca"].append(float(oca_t))
+        self.metrics["oca"].append(float(row.get("oca", float("nan"))))
 
     def end_step(self):
         dt = time.time() - getattr(self, "_step_t", time.time())
@@ -103,8 +120,15 @@ class StreamMetricLogger:
     def mark_drift(self, idx: int):
         self.drift_idx.append(int(idx))
 
-    def save_npz(self, save_dir: str):
+    def set_metadata(self, **metadata):
+        for key, value in metadata.items():
+            self.metadata[str(key)] = value
+
+    def save_npz(self, save_dir: str, metadata: Optional[dict] = None):
         os.makedirs(save_dir, exist_ok=True)
+
+        if metadata:
+            self.set_metadata(**metadata)
 
         out = {k: np.asarray(v, dtype=np.float32) for k, v in self.metrics.items()}
         out["drift"] = np.asarray(self.drift_idx, dtype=np.int64)
@@ -112,14 +136,11 @@ class StreamMetricLogger:
         out["times"] = np.asarray(self.times, dtype=np.float32)
         out["mems"] = np.asarray(self.mems, dtype=np.float32)
 
-        # ACR from OCA (uses whatever is in out["oca"])
-        if out.get("oca", np.array([])).size > 0:
-            oca = np.asarray(out["oca"], dtype=np.float32)
-            f_star = float(np.nanmax(oca))
-            acr = float(np.nanmean(f_star - oca))
-        else:
-            acr = float("nan")
+        acr_curve, acr = compute_acr_outputs(out.get("oca", np.array([], dtype=np.float32)))
+        out["acr_curve"] = acr_curve
         out["acr"] = np.asarray([acr], dtype=np.float32)
+        if self.metadata:
+            out["metadata"] = np.asarray([self.metadata], dtype=object)
 
         np.savez(os.path.join(save_dir, "all_metrics.npz"), **out)
 

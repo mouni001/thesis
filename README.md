@@ -102,7 +102,12 @@ python train.py -DataName=adult -AutoEncoder='AE' -beta=0.9 -eta=-0.01 -learning
 
 ```bash
 python train.py -DataName=insects -AutoEncoder='AE' -beta=0.9 -eta=-0.01 -learningrate=0.001 -RecLossFunc=Smooth
+python train.py -DataName insects -insects_csv data/INSECTS_gradual_balanced.csv -RecLossFunc Smooth
 ```
+
+Current note: the INSECTS pipeline in this repo is a sequential same-feature stream split.
+It is useful for online learning, concept drift, and imbalance experiments, but it is not yet
+a true feature-evolution or feature-obsolescence benchmark.
 
 ---
 
@@ -178,4 +183,3 @@ These are saved automatically in `all_metrics.npz`.
 ## License
 
 This project is licensed under the MIT License. See `LICENSE` for details.
-
