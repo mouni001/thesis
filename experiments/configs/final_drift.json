@@ -1,0 +1,25 @@
+{
+  "name": "final_drift_v7",
+  "description": "Protocol-v7 ADWIN/MDDM and drift-relevance comparison around the held-out second annotated abrupt INSECTS change at source index 19500.",
+  "reference_experiment": "adwin_with_drift_relevance",
+  "base_args": {
+    "DataName": "insects",
+    "insects_csv": "data/INSECTS_abrupt_balanced.csv",
+    "feature_protocol": "feature_evolution",
+    "feature_scenario": "balanced",
+    "split_index": 19000,
+    "T1": 1500,
+    "t": 1000,
+    "eval_window": 250,
+    "RecLossFunc": "mse",
+    "diagnostic_interval": 25,
+    "run_sanity_baselines": 0
+  },
+  "seeds": [11, 17, 23, 31, 43],
+  "experiments": [
+    {"name": "adwin_with_drift_relevance", "args": {"detector_type": "adwin"}},
+    {"name": "adwin_without_drift_relevance", "args": {"detector_type": "adwin", "prototype_drift_weight": 0.0}},
+    {"name": "mddm_g_with_drift_relevance", "args": {"detector_type": "mddm_g"}},
+    {"name": "mddm_g_without_drift_relevance", "args": {"detector_type": "mddm_g", "prototype_drift_weight": 0.0}}
+  ]
+}

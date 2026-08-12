@@ -1,0 +1,85 @@
+{
+  "suite": "pilot_drift_v3",
+  "created_at": "2026-08-11T14:19:07-0400",
+  "git_revision": "62d61658fac3048a66d190ba9558043208fad40d",
+  "git_diff_sha256": "fbe5df50a6391c64490a9288faf31950f5e8560e2d4bf9801f1f80409007bfe1",
+  "source_sha256": {
+    "aggregate_results.py": "397abce65f0384a57d733c4f42cf7ae3761bf45f8d3222461636bcc6212a02a8",
+    "autoencoder.py": "1e93b8ecb44fb80ef90b69320b96ebee77294aa749807946a807d600e064ebd6",
+    "evaluator_stream.py": "f3769d790bfe5edabe9657924fcf2f505c540152f65d11a7d60136334f3d35da",
+    "loaddatasets.py": "330561a5217d8861df49a6e3e86e50874eaab71fd8d13dd33a365507b0f55c92",
+    "mddm_moa_exact.py": "f458b77e9e4a9379106de2140f67f634f7ea9dfeb513256c483d2645a7760fd0",
+    "metric.py": "7e18b2e72f83b185583a827936d30f68d8a0f5cb497ac0b78a614357a4a1ae6f",
+    "metrics_logger.py": "67b3d983cc7f8bb888ed591e353d6e40d42467c6e0a07d8262ec86c3b91d72aa",
+    "mlp.py": "6041c04c2007951b8c4a7d65b9a18cb1370dfd2aff62efe13ee6680a90f4d79c",
+    "model.py": "8af34baad81031f1fce41d26ecfee0414e72f9c6e4c51cdb9489258e744433f1",
+    "moe.py": "79eecdd1d16e47ed2439006da5591201cb2d2eede5b45d39b204515b040558bd",
+    "paths.py": "c01e49e0a89f51f62b57b1069df714fa3c949209e38b6ab846a2121c567ee7e1",
+    "plot_all_metrics.py": "45312627c5eb94fb9558280ec1441c65de4f6f6f8b7a2bf9ccb6a28b1c83ab29",
+    "plot_insect_variants.py": "965bca505fc112ecdd43d5f46c379bc391423a04e70c160ed940a25a890b8041",
+    "run_all_insects.py": "ed446f730679c8ce64d355184dc2628095f70251630195a758324e485709f793",
+    "run_prototype_experiments.py": "2a10781e59dbc3ffc557996fade8fd464e5aab8316ad9dff773818d9070a69c1",
+    "run_river_baseline.py": "9518a3e8c1f237d9647339e3d132c28d39fe5418b95d218548e53f81bd7f4f81",
+    "run_thesis_experiments.py": "6de32906fa687d871801e8873f20c7c64163f96f31280d7f44fedba67b35cfa5",
+    "stream_annotations.py": "0bd8a3883dcfbb0dc94960d753fa51f733be140216fc6e1da857213deedde83f",
+    "train.py": "67499ac5d7478e2756195bbb0f3796747fb094f248c13e5586bb7e68a25d1333",
+    "train_driver.py": "7377cdecba829651192bde089d3a32918c69830916e04c5a0db5cad89c8ff3db",
+    "vae.py": "a83110bc981c69d739068b9a641086fcf838961584aa1d7a5b0ff694b451918a"
+  },
+  "python": "3.13.12 | packaged by conda-forge | (main, Feb  5 2026, 06:11:05) [Clang 19.1.7 ]",
+  "platform": "macOS-26.5-arm64-arm-64bit-Mach-O",
+  "dependencies": {
+    "numpy": "2.4.4",
+    "pandas": "2.3.3",
+    "scikit-learn": "1.8.0",
+    "torch": "2.11.0",
+    "river": "0.24.2",
+    "matplotlib": "not-installed"
+  },
+  "config_source": "/Users/nihadzitouni/Desktop/thesis/experiments/configs/pilot_drift.json",
+  "config": {
+    "name": "pilot_drift_v3",
+    "description": "Protocol-v4 detector and drift-relevance pilot around an annotated abrupt INSECTS change.",
+    "seeds": [
+      17
+    ],
+    "base_args": {
+      "DataName": "insects",
+      "insects_csv": "data/INSECTS_abrupt_balanced.csv",
+      "feature_protocol": "feature_evolution",
+      "split_index": 13852,
+      "T1": 1500,
+      "t": 1000,
+      "eval_window": 100,
+      "RecLossFunc": "mse"
+    },
+    "experiments": [
+      {
+        "name": "adwin_with_drift_relevance",
+        "args": {
+          "detector_type": "adwin"
+        }
+      },
+      {
+        "name": "adwin_without_drift_relevance",
+        "args": {
+          "detector_type": "adwin",
+          "prototype_drift_weight": 0.0
+        }
+      },
+      {
+        "name": "mddm_g_with_drift_relevance",
+        "args": {
+          "detector_type": "mddm_g"
+        }
+      },
+      {
+        "name": "mddm_g_without_drift_relevance",
+        "args": {
+          "detector_type": "mddm_g",
+          "prototype_drift_weight": 0.0
+        }
+      }
+    ]
+  }
+}

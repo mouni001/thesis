@@ -51,9 +51,10 @@ def _safe_div(a, b):
 def _gmean_from_recalls(recalls):
     recalls = np.asarray(recalls, dtype=np.float32)
     recalls = recalls[np.isfinite(recalls)]
-    recalls = recalls[recalls > 0]
     if recalls.size == 0:
         return float("nan")
+    if np.any(recalls <= 0):
+        return 0.0
     return float(np.exp(np.mean(np.log(recalls + 1e-12))))
 
 
@@ -78,18 +79,19 @@ def update_all(y_true: int, y_proba):
 
     y_true = int(y_true)
     y_pred = int(np.argmax(proba))
-    true_proba = float(proba[y_true]) if 0 <= y_true < proba.size else 0.0
-    true_proba = min(max(true_proba, 1e-12), 1.0)
+    true_proba = float(proba[y_true]) if 0 <= y_true < proba.size else 0.0 # look at the probs again and make sure its not out of range
+    true_proba = min(max(true_proba, 1e-12), 1.0) # because log(0) breaks numerically go to tiny number instead
     inst_loss = float(-np.log(true_proba))
 
     _y_true.append(y_true)
     _y_pred.append(y_pred)
     _proba.append(proba)
-
+    
+    #convert to numPy array
     yt = np.asarray(_y_true, dtype=np.int64)
     yp = np.asarray(_y_pred, dtype=np.int64)
-    P = np.stack(list(_proba), axis=0)
-    C = P.shape[1]
+    P = np.stack(list(_proba), axis=0) #convert to Numpy matrix (#sample,#classes )
+    C = P.shape[1] # number of classes 
 
     out = {}
     out["y_pred"] = y_pred
@@ -155,13 +157,20 @@ def update_all(y_true: int, y_proba):
                 Y[i, cls] = 1
 
         aps = []
+        ap_by_class = {}
         for c in range(C):
             if Y[:, c].sum() == 0:
                 continue
-            aps.append(average_precision_score(Y[:, c], P[:, c]))
+            ap = float(average_precision_score(Y[:, c], P[:, c]))
+            aps.append(ap)
+            ap_by_class[c] = ap
         out["pr_auc"] = float(np.mean(aps)) if len(aps) else float("nan")
+        out["pr_auc_min"] = float(ap_by_class.get(min_class, float("nan")))
+        out["pr_auc_maj"] = float(ap_by_class.get(maj_class, float("nan")))
     except Exception:
         out["pr_auc"] = float("nan")
+        out["pr_auc_min"] = float("nan")
+        out["pr_auc_maj"] = float("nan")
 
     _LOSS_SEEN += 1
     _LOSS_SUM += inst_loss

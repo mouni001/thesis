@@ -1,0 +1,53 @@
+/Users/nihadzitouni/Library/Python/3.9/lib/python/site-packages/sklearn/preprocessing/_data.py:258: UserWarning: Numerical issues were encountered when centering the data and might not be solved. Dataset may contain too large values. You may need to prescale your features.
+  warnings.warn(
+/Users/nihadzitouni/Library/Python/3.9/lib/python/site-packages/sklearn/preprocessing/_data.py:277: UserWarning: Numerical issues were encountered when scaling the data and might not be solved. The standard deviation of the data is probably very close to 0. 
+  warnings.warn(
+/Users/nihadzitouni/Library/Python/3.9/lib/python/site-packages/sklearn/metrics/_classification.py:758: RuntimeWarning: invalid value encountered in scalar divide
+  k = np.sum(w_mat * confusion) / np.sum(w_mat * expected)
+/Users/nihadzitouni/Library/Python/3.9/lib/python/site-packages/sklearn/metrics/_classification.py:758: RuntimeWarning: invalid value encountered in scalar divide
+  k = np.sum(w_mat * confusion) / np.sum(w_mat * expected)
+/Users/nihadzitouni/Library/Python/3.9/lib/python/site-packages/sklearn/metrics/_classification.py:758: RuntimeWarning: invalid value encountered in scalar divide
+  k = np.sum(w_mat * confusion) / np.sum(w_mat * expected)
+/Users/nihadzitouni/Library/Python/3.9/lib/python/site-packages/sklearn/metrics/_classification.py:758: RuntimeWarning: invalid value encountered in scalar divide
+  k = np.sum(w_mat * confusion) / np.sum(w_mat * expected)
+[INFO] Using T1=5000 (B=4000 from S1, t=1000 from S2)
+[INFO] dims: S1=24, S2=25
+[INFO] eval_window=500, detector=adwin, seed=42
+[INFO] protocol=old3s_feature_evolution
+[INFO] INSECTS uses OLD3S-style feature evolution: S1=obsolete+shared, S2=shared+new.
+[INFO] shared_frac=0.5, feature_seed=1314
+[INFO] Global maj/min on evaluated stream: 1 3 {0: 1282, 1: 1614, 2: 328, 3: 108, 4: 506, 5: 1162}
+[INFO] T1=5000, t=1000, B=4000, num_classes=6
+[INFO] step 200/5000
+[INFO] step 400/5000
+[INFO] step 600/5000
+[INFO] step 800/5000
+[INFO] step 1000/5000
+[INFO] step 1200/5000
+[INFO] step 1400/5000
+[INFO] step 1600/5000
+[INFO] step 1800/5000
+[INFO] step 2000/5000
+[INFO] step 2200/5000
+[INFO] step 2400/5000
+[INFO] step 2600/5000
+[INFO] step 2800/5000
+[INFO] step 3000/5000
+[INFO] step 3200/5000
+[INFO] step 3400/5000
+[INFO] step 3600/5000
+[INFO] step 3800/5000
+[INFO] step 4000/5000
+[INFO] S1->S2 boundary reached, created classifier_2
+[INFO] step 4200/5000
+[INFO] step 4400/5000
+[INFO] step 4600/5000
+[INFO] step 4800/5000
+[INFO] step 5000/5000
+[INFO] Predicted class distribution: Counter({1: 1645, 0: 1359, 5: 1164, 4: 595, 2: 193, 3: 44})
+[OK] Adaptive run done.
+[WARN] Skipping no-change baseline because S1 and S2 feature dimensions differ.
+[OK] Global majority baseline saved to: /Users/nihadzitouni/Desktop/thesis/model/data/parameter_insects__INSECTS_incremental_imbalanced__feature_evolution__global_majority/metrics/all_metrics.npz
+[INFO] Global majority class = 1
+[OK] Cumulative majority baseline saved to: /Users/nihadzitouni/Desktop/thesis/model/data/parameter_insects__INSECTS_incremental_imbalanced__feature_evolution__cumulative_majority/metrics/all_metrics.npz
+[OK] Done.

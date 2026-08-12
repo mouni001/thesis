@@ -1,0 +1,63 @@
+{
+  "name": "pilot_complete_ablation_v1",
+  "description": "Protocol-v6 one-at-a-time component ablation pilot with distinct post-transition phases.",
+  "reference_experiment": "full_model",
+  "base_args": {
+    "DataName": "insects",
+    "insects_csv": "data/INSECTS_incremental_balanced.csv",
+    "feature_protocol": "feature_evolution",
+    "feature_scenario": "balanced",
+    "split_index": 35000,
+    "T1": 1000,
+    "t": 500,
+    "eval_window": 125,
+    "detector_type": "adwin",
+    "RecLossFunc": "mse",
+    "diagnostic_interval": 10,
+    "run_sanity_baselines": 0
+  },
+  "seeds": [17],
+  "experiments": [
+    {"name": "full_model", "args": {}},
+    {"name": "no_transfer_mapper", "args": {"use_transfer_mapper": 0}},
+    {"name": "no_historical_knowledge", "args": {"use_historical_knowledge": 0}},
+    {"name": "no_prototype_memory", "args": {"use_prototype_memory": 0}},
+    {"name": "no_obsolescence", "args": {"prototype_obsolescence_weight": 0.0}},
+    {"name": "no_freshness", "args": {"prototype_freshness_weight": 0.0}},
+    {"name": "no_representativeness", "args": {"prototype_rep_weight": 0.0}},
+    {"name": "no_uncertainty", "args": {"prototype_uncertainty_weight": 0.0}},
+    {"name": "no_drift_relevance", "args": {"prototype_drift_weight": 0.0}},
+    {"name": "no_minority_weighting", "args": {"prototype_minority_weight": 0.0}},
+    {"name": "fixed_fusion_no_router", "args": {"fusion_mode": "fixed"}},
+    {"name": "no_historical_expert", "args": {"enable_historical_expert": 0}},
+    {"name": "no_adaptive_expert", "args": {"enable_adaptive_expert": 0}},
+    {"name": "no_prototype_expert", "args": {"enable_prototype_expert": 0}},
+    {
+      "name": "single_adaptive_cold_start",
+      "args": {
+        "use_historical_knowledge": 0,
+        "use_prototype_memory": 0,
+        "fusion_mode": "fixed",
+        "enable_historical_expert": 0,
+        "enable_prototype_expert": 0
+      }
+    },
+    {
+      "name": "single_adaptive_transferred",
+      "args": {
+        "use_prototype_memory": 0,
+        "fusion_mode": "fixed",
+        "enable_historical_expert": 0,
+        "enable_prototype_expert": 0
+      }
+    },
+    {
+      "name": "old3s_style_fixed_two_expert",
+      "args": {
+        "use_prototype_memory": 0,
+        "fusion_mode": "fixed",
+        "enable_prototype_expert": 0
+      }
+    }
+  ]
+}

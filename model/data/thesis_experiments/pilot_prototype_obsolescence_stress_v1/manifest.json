@@ -1,0 +1,86 @@
+{
+  "suite": "pilot_prototype_obsolescence_stress_v1",
+  "created_at": "2026-08-11T14:39:08-0400",
+  "git_revision": "62d61658fac3048a66d190ba9558043208fad40d",
+  "git_diff_sha256": "434b371b6238912703c1cd56dc9a113637d089abe4848ac8a95e7aef40838821",
+  "source_sha256": {
+    "aggregate_results.py": "397abce65f0384a57d733c4f42cf7ae3761bf45f8d3222461636bcc6212a02a8",
+    "autoencoder.py": "1e93b8ecb44fb80ef90b69320b96ebee77294aa749807946a807d600e064ebd6",
+    "evaluator_stream.py": "f3769d790bfe5edabe9657924fcf2f505c540152f65d11a7d60136334f3d35da",
+    "loaddatasets.py": "330561a5217d8861df49a6e3e86e50874eaab71fd8d13dd33a365507b0f55c92",
+    "mddm_moa_exact.py": "f458b77e9e4a9379106de2140f67f634f7ea9dfeb513256c483d2645a7760fd0",
+    "metric.py": "7e18b2e72f83b185583a827936d30f68d8a0f5cb497ac0b78a614357a4a1ae6f",
+    "metrics_logger.py": "67b3d983cc7f8bb888ed591e353d6e40d42467c6e0a07d8262ec86c3b91d72aa",
+    "mlp.py": "6041c04c2007951b8c4a7d65b9a18cb1370dfd2aff62efe13ee6680a90f4d79c",
+    "model.py": "3bce1905c38aac46636be75c2d014742db3a6d77a60e995cdd1a67c2d6866c2d",
+    "moe.py": "6d28ee960fb7fb46cdba1fcc376a5b4a8e23298b085dd6694d7a6ea71f859a12",
+    "paths.py": "c01e49e0a89f51f62b57b1069df714fa3c949209e38b6ab846a2121c567ee7e1",
+    "plot_all_metrics.py": "45312627c5eb94fb9558280ec1441c65de4f6f6f8b7a2bf9ccb6a28b1c83ab29",
+    "plot_insect_variants.py": "965bca505fc112ecdd43d5f46c379bc391423a04e70c160ed940a25a890b8041",
+    "run_all_insects.py": "ed446f730679c8ce64d355184dc2628095f70251630195a758324e485709f793",
+    "run_prototype_experiments.py": "2a10781e59dbc3ffc557996fade8fd464e5aab8316ad9dff773818d9070a69c1",
+    "run_river_baseline.py": "9518a3e8c1f237d9647339e3d132c28d39fe5418b95d218548e53f81bd7f4f81",
+    "run_thesis_experiments.py": "c60e7a981edacee0464bfa183f985af2d8b83a74db8ee03d545a90de0b3cdbca",
+    "stream_annotations.py": "0bd8a3883dcfbb0dc94960d753fa51f733be140216fc6e1da857213deedde83f",
+    "train.py": "7221b4bb4ecad3ad86ccd3c9ac850a6eae74c3902803469b73f8e2ef7a77b2b6",
+    "train_driver.py": "7377cdecba829651192bde089d3a32918c69830916e04c5a0db5cad89c8ff3db",
+    "vae.py": "a83110bc981c69d739068b9a641086fcf838961584aa1d7a5b0ff694b451918a"
+  },
+  "python": "3.13.12 | packaged by conda-forge | (main, Feb  5 2026, 06:11:05) [Clang 19.1.7 ]",
+  "platform": "macOS-26.5-arm64-arm-64bit-Mach-O",
+  "dependencies": {
+    "numpy": "2.4.4",
+    "pandas": "2.3.3",
+    "scikit-learn": "1.8.0",
+    "torch": "2.11.0",
+    "river": "0.24.2",
+    "matplotlib": "not-installed"
+  },
+  "config_source": "/Users/nihadzitouni/Desktop/thesis/experiments/configs/pilot_prototype_obsolescence_stress.json",
+  "config": {
+    "name": "pilot_prototype_obsolescence_stress_v1",
+    "description": "Protocol-v6 stress test retaining more S1 prototypes under low-overlap S2 contraction to create measurable obsolete-prototype pressure.",
+    "base_args": {
+      "DataName": "insects",
+      "insects_csv": "data/INSECTS_incremental_balanced.csv",
+      "feature_protocol": "feature_evolution",
+      "feature_scenario": "s2_contracts",
+      "shared_frac": 0.25,
+      "split_index": 35000,
+      "T1": 1000,
+      "t": 500,
+      "eval_window": 125,
+      "prototype_bank_size": 512,
+      "detector_type": "adwin",
+      "diagnostic_interval": 10,
+      "run_sanity_baselines": 0
+    },
+    "seeds": [
+      17
+    ],
+    "experiments": [
+      {
+        "name": "full_decay",
+        "args": {}
+      },
+      {
+        "name": "no_feature_obsolescence",
+        "args": {
+          "prototype_obsolescence_weight": 0.0
+        }
+      },
+      {
+        "name": "no_age_decay",
+        "args": {
+          "prototype_freshness_weight": 0.0
+        }
+      },
+      {
+        "name": "no_prototype_memory",
+        "args": {
+          "use_prototype_memory": 0
+        }
+      }
+    ]
+  }
+}

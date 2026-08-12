@@ -1,0 +1,99 @@
+{
+  "suite": "final_prototype_obsolescence_v7",
+  "created_at": "2026-08-11T20:10:21-0400",
+  "git_revision": "62d61658fac3048a66d190ba9558043208fad40d",
+  "git_diff_sha256": "229b7f60e6c4470acf9ee38d1e7546132bb184810a56d9ebea6318497a23330f",
+  "source_sha256": {
+    "aggregate_results.py": "397abce65f0384a57d733c4f42cf7ae3761bf45f8d3222461636bcc6212a02a8",
+    "analyze_experiment_suite.py": "14653b5dbe3131a35d46d51fd65e58c73041703c46f6ee1e7c8a48b79e9e8409",
+    "audit_experiment_suite.py": "8ac372dddcdfdad2c2e4793b21ad3d3c89fc57e4b0f6fff2ef37aeec061e3523",
+    "autoencoder.py": "1e93b8ecb44fb80ef90b69320b96ebee77294aa749807946a807d600e064ebd6",
+    "evaluator_stream.py": "f3769d790bfe5edabe9657924fcf2f505c540152f65d11a7d60136334f3d35da",
+    "explain_stream.py": "bc4bfb758c8babcb9f409005b953156301decc5148fdfa5cdb7f7a76cfd12ae8",
+    "generate_thesis_figures.py": "8ea5ee7d9b12e356170dc5058ebba272557fde0129763a5ce39567de9352434f",
+    "generate_thesis_tables.py": "8cb883011a40d2b778287854fc6dafb6d56279c8b0ced139005990f8a39d7fbb",
+    "loaddatasets.py": "bc6be9b769ee995d49d97246fab9a0fe8207097c16b213b2c7db91286bbf263b",
+    "mddm_moa_exact.py": "f458b77e9e4a9379106de2140f67f634f7ea9dfeb513256c483d2645a7760fd0",
+    "metric.py": "7e18b2e72f83b185583a827936d30f68d8a0f5cb497ac0b78a614357a4a1ae6f",
+    "metrics_logger.py": "bcabd481900dc6353a6357ede9c73d175fdf7aa4dea62c84dcf68d9ec7d58d62",
+    "mlp.py": "6041c04c2007951b8c4a7d65b9a18cb1370dfd2aff62efe13ee6680a90f4d79c",
+    "model.py": "64a6a4bf2bd5f841a9fadc2c9289984eca68d816b6e0d4a24e4208b66a9257b4",
+    "moe.py": "6d28ee960fb7fb46cdba1fcc376a5b4a8e23298b085dd6694d7a6ea71f859a12",
+    "paths.py": "c01e49e0a89f51f62b57b1069df714fa3c949209e38b6ab846a2121c567ee7e1",
+    "plot_all_metrics.py": "45312627c5eb94fb9558280ec1441c65de4f6f6f8b7a2bf9ccb6a28b1c83ab29",
+    "plot_insect_variants.py": "965bca505fc112ecdd43d5f46c379bc391423a04e70c160ed940a25a890b8041",
+    "run_all_insects.py": "ed446f730679c8ce64d355184dc2628095f70251630195a758324e485709f793",
+    "run_prototype_experiments.py": "2a10781e59dbc3ffc557996fade8fd464e5aab8316ad9dff773818d9070a69c1",
+    "run_river_baseline.py": "9f920bb20767dbf58cef877fb8bd0f484faa8631f8f4588cdd8f76cf92adc43b",
+    "run_thesis_experiments.py": "3be2d1861afdec06b016d24b1c6e86e859523525728429c4a9f5c979c0cdbaec",
+    "stream_annotations.py": "0bd8a3883dcfbb0dc94960d753fa51f733be140216fc6e1da857213deedde83f",
+    "train.py": "a00fee3d415209511841a8bb2e3ab581133e727f7381c09bf0729ddda16ddf03",
+    "train_driver.py": "7377cdecba829651192bde089d3a32918c69830916e04c5a0db5cad89c8ff3db",
+    "vae.py": "a83110bc981c69d739068b9a641086fcf838961584aa1d7a5b0ff694b451918a"
+  },
+  "python": "3.13.12 | packaged by conda-forge | (main, Feb  5 2026, 06:11:05) [Clang 19.1.7 ]",
+  "platform": "macOS-26.5-arm64-arm-64bit-Mach-O",
+  "dependencies": {
+    "numpy": "2.4.4",
+    "pandas": "2.3.3",
+    "scikit-learn": "1.8.0",
+    "scipy": "1.17.1",
+    "torch": "2.11.0",
+    "river": "0.24.2",
+    "matplotlib": "3.11.1",
+    "shap": "0.52.0",
+    "lime": "0.2.0.1"
+  },
+  "config_source": "/Users/nihadzitouni/Desktop/thesis/experiments/configs/final_prototype_obsolescence.json",
+  "config": {
+    "name": "final_prototype_obsolescence_v7",
+    "description": "Protocol-v7 low-overlap contraction stress test of feature obsolescence, age decay, and prototype removal on the held-out source region.",
+    "reference_experiment": "full_decay",
+    "base_args": {
+      "DataName": "insects",
+      "insects_csv": "data/INSECTS_incremental_balanced.csv",
+      "feature_protocol": "feature_evolution",
+      "feature_scenario": "s2_contracts",
+      "shared_frac": 0.25,
+      "split_index": 45000,
+      "T1": 1500,
+      "t": 1000,
+      "eval_window": 250,
+      "prototype_bank_size": 512,
+      "detector_type": "adwin",
+      "diagnostic_interval": 25,
+      "run_sanity_baselines": 0
+    },
+    "seeds": [
+      11,
+      17,
+      23,
+      31,
+      43
+    ],
+    "experiments": [
+      {
+        "name": "full_decay",
+        "args": {}
+      },
+      {
+        "name": "no_feature_obsolescence",
+        "args": {
+          "prototype_obsolescence_weight": 0.0
+        }
+      },
+      {
+        "name": "no_age_decay",
+        "args": {
+          "prototype_freshness_weight": 0.0
+        }
+      },
+      {
+        "name": "no_prototype_memory",
+        "args": {
+          "use_prototype_memory": 0
+        }
+      }
+    ]
+  }
+}

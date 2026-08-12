@@ -1,0 +1,36 @@
+{
+  "suite": "/Users/nihadzitouni/Desktop/thesis/model/data/thesis_experiments/final_class_imbalance_v7",
+  "reference": "incremental_weighting_on",
+  "tables": [
+    {
+      "table": "main_predictive_results",
+      "csv": "/Users/nihadzitouni/Desktop/thesis/model/data/thesis_experiments/final_class_imbalance_v7/tables/main_predictive_results.csv",
+      "latex": "/Users/nihadzitouni/Desktop/thesis/model/data/thesis_experiments/final_class_imbalance_v7/tables/main_predictive_results.tex",
+      "source": "/Users/nihadzitouni/Desktop/thesis/model/data/thesis_experiments/final_class_imbalance_v7/summary.csv"
+    },
+    {
+      "table": "computational_results",
+      "csv": "/Users/nihadzitouni/Desktop/thesis/model/data/thesis_experiments/final_class_imbalance_v7/tables/computational_results.csv",
+      "latex": "/Users/nihadzitouni/Desktop/thesis/model/data/thesis_experiments/final_class_imbalance_v7/tables/computational_results.tex",
+      "source": "/Users/nihadzitouni/Desktop/thesis/model/data/thesis_experiments/final_class_imbalance_v7/summary.csv"
+    },
+    {
+      "table": "paired_statistical_tests",
+      "csv": "/Users/nihadzitouni/Desktop/thesis/model/data/thesis_experiments/final_class_imbalance_v7/tables/paired_statistical_tests.csv",
+      "latex": "/Users/nihadzitouni/Desktop/thesis/model/data/thesis_experiments/final_class_imbalance_v7/tables/paired_statistical_tests.tex",
+      "source": "/Users/nihadzitouni/Desktop/thesis/model/data/thesis_experiments/final_class_imbalance_v7/paired_tests.csv"
+    },
+    {
+      "table": "detector_results",
+      "csv": "/Users/nihadzitouni/Desktop/thesis/model/data/thesis_experiments/final_class_imbalance_v7/tables/detector_results.csv",
+      "latex": "/Users/nihadzitouni/Desktop/thesis/model/data/thesis_experiments/final_class_imbalance_v7/tables/detector_results.tex",
+      "source": "/Users/nihadzitouni/Desktop/thesis/model/data/thesis_experiments/final_class_imbalance_v7/summary.csv"
+    }
+  ],
+  "format": "mean \u00b1 sample standard deviation across finite paired seeds",
+  "notes": [
+    "Recovery summaries exclude unreached values; missing fractions remain in aggregate_statistics.csv.",
+    "Statistical difference direction is candidate minus reference.",
+    "Holm-adjusted p-values are reported with paired effect sizes and confidence intervals."
+  ]
+}

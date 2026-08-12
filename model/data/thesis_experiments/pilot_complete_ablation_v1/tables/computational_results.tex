@@ -1,0 +1,23 @@
+\begin{tabular}{llllll}
+\toprule
+Method & Inference latency (ms) & Update latency (ms) & Peak RSS (MB) & Persistent size (KB) & Prototype vectors (KB) \\
+\midrule
+full\_model & 11.009 & 22.450 & 491.438 & 353.273 & 25.000 \\
+no\_transfer\_mapper & 11.068 & 21.932 & 495.422 & 353.273 & 25.000 \\
+no\_historical\_knowledge & 7.283 & 13.473 & 474.078 & 353.211 & 25.000 \\
+no\_prototype\_memory & 0.725 & 6.104 & 498.734 & 244.491 & 0.000 \\
+no\_obsolescence & 10.965 & 22.324 & 491.359 & 353.273 & 25.000 \\
+no\_freshness & 10.949 & 22.255 & 489.828 & 353.273 & 25.000 \\
+no\_representativeness & 10.859 & 22.033 & 494.828 & 353.273 & 25.000 \\
+no\_uncertainty & 10.918 & 21.983 & 480.734 & 353.273 & 25.000 \\
+no\_drift\_relevance & 10.989 & 22.648 & 490.266 & 353.273 & 25.000 \\
+no\_minority\_weighting & 11.011 & 22.145 & 494.719 & 353.273 & 25.000 \\
+fixed\_fusion\_no\_router & 11.031 & 21.979 & 497.078 & 353.336 & 25.000 \\
+no\_historical\_expert & 10.855 & 22.302 & 494.016 & 353.273 & 25.000 \\
+no\_adaptive\_expert & 11.015 & 21.905 & 488.469 & 353.273 & 25.000 \\
+no\_prototype\_expert & 11.152 & 22.646 & 490.453 & 353.273 & 25.000 \\
+single\_adaptive\_cold\_start & 0.593 & 5.095 & 481.422 & 244.491 & 0.000 \\
+single\_adaptive\_transferred & 0.615 & 5.697 & 489.109 & 244.491 & 0.000 \\
+old3s\_style\_fixed\_two\_expert & 0.715 & 5.683 & 489.109 & 244.491 & 0.000 \\
+\bottomrule
+\end{tabular}

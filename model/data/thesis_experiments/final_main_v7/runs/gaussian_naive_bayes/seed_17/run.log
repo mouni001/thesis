@@ -1,0 +1,4 @@
+[INFO] contiguous original stream interval: [44500, 46000)
+[INFO] known exact abrupt points local=[]
+[INFO] Predicted class distribution: Counter({2: 348, 3: 296, 5: 281, 1: 219, 0: 196, 4: 160})
+[OK] River baseline done: gaussian_naive_bayes

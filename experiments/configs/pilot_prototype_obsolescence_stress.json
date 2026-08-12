@@ -1,0 +1,26 @@
+{
+  "name": "pilot_prototype_obsolescence_stress_v1",
+  "description": "Protocol-v6 stress test retaining more S1 prototypes under low-overlap S2 contraction to create measurable obsolete-prototype pressure.",
+  "base_args": {
+    "DataName": "insects",
+    "insects_csv": "data/INSECTS_incremental_balanced.csv",
+    "feature_protocol": "feature_evolution",
+    "feature_scenario": "s2_contracts",
+    "shared_frac": 0.25,
+    "split_index": 35000,
+    "T1": 1000,
+    "t": 500,
+    "eval_window": 125,
+    "prototype_bank_size": 512,
+    "detector_type": "adwin",
+    "diagnostic_interval": 10,
+    "run_sanity_baselines": 0
+  },
+  "seeds": [17],
+  "experiments": [
+    {"name": "full_decay", "args": {}},
+    {"name": "no_feature_obsolescence", "args": {"prototype_obsolescence_weight": 0.0}},
+    {"name": "no_age_decay", "args": {"prototype_freshness_weight": 0.0}},
+    {"name": "no_prototype_memory", "args": {"use_prototype_memory": 0}}
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "name": "final_sensitivity_v7",
+  "description": "Protocol-v7 one-factor-at-a-time sensitivity study around frozen defaults on the held-out source region.",
+  "reference_experiment": "default",
+  "base_args": {
+    "DataName": "insects",
+    "insects_csv": "data/INSECTS_incremental_balanced.csv",
+    "feature_protocol": "feature_evolution",
+    "feature_scenario": "balanced",
+    "split_index": 45000,
+    "T1": 1000,
+    "t": 750,
+    "eval_window": 125,
+    "detector_type": "adwin",
+    "RecLossFunc": "mse",
+    "diagnostic_interval": 25,
+    "run_sanity_baselines": 0
+  },
+  "seeds": [11, 17, 23, 31, 43],
+  "experiments": [
+    {"name": "default", "args": {}},
+    {"name": "prototype_weight_0_10", "args": {"prototype_weight": 0.10}},
+    {"name": "prototype_weight_0_60", "args": {"prototype_weight": 0.60}},
+    {"name": "obsolescence_0_50", "args": {"prototype_obsolescence_weight": 0.50}},
+    {"name": "obsolescence_2_00", "args": {"prototype_obsolescence_weight": 2.00}},
+    {"name": "drift_weight_0_25", "args": {"prototype_drift_weight": 0.25}},
+    {"name": "drift_weight_1_50", "args": {"prototype_drift_weight": 1.50}},
+    {"name": "minority_weight_0_25", "args": {"prototype_minority_weight": 0.25}},
+    {"name": "minority_weight_1_00", "args": {"prototype_minority_weight": 1.00}},
+    {"name": "freshness_weight_0_50", "args": {"prototype_freshness_weight": 0.50}},
+    {"name": "freshness_weight_2_00", "args": {"prototype_freshness_weight": 2.00}},
+    {"name": "router_hidden_8", "args": {"router_hidden_dim": 8}},
+    {"name": "router_hidden_64", "args": {"router_hidden_dim": 64}},
+    {"name": "learning_rate_0_0005", "args": {"learningrate": 0.0005}},
+    {"name": "learning_rate_0_002", "args": {"learningrate": 0.002}},
+    {"name": "memory_size_64", "args": {"prototype_bank_size": 64}},
+    {"name": "memory_size_512", "args": {"prototype_bank_size": 512}},
+    {"name": "prototype_k_3", "args": {"prototype_k": 3}},
+    {"name": "prototype_k_9", "args": {"prototype_k": 9}},
+    {"name": "overlap_0_25", "args": {"shared_frac": 0.25}},
+    {"name": "overlap_0_75", "args": {"shared_frac": 0.75}}
+  ]
+}

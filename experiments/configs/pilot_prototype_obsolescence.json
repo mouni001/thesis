@@ -1,0 +1,31 @@
+{
+  "name": "pilot_prototype_obsolescence_v1",
+  "description": "Pilot isolating prototype memory, feature obsolescence, and age-based freshness after the S1-to-S2 feature transition.",
+  "base_args": {
+    "DataName": "insects",
+    "insects_csv": "data/INSECTS_incremental_balanced.csv",
+    "feature_protocol": "feature_evolution",
+    "feature_scenario": "balanced",
+    "split_index": 35000,
+    "T1": 1500,
+    "t": 1000,
+    "eval_window": 200,
+    "detector_type": "adwin",
+    "diagnostic_interval": 10,
+    "run_sanity_baselines": 0
+  },
+  "seeds": [17],
+  "experiments": [
+    {"name": "full", "args": {}},
+    {"name": "no_prototype_memory", "args": {"use_prototype_memory": 0}},
+    {"name": "no_obsolescence", "args": {"prototype_obsolescence_weight": 0.0}},
+    {"name": "no_age_decay", "args": {"prototype_freshness_weight": 0.0}},
+    {
+      "name": "no_obsolescence_or_age_decay",
+      "args": {
+        "prototype_obsolescence_weight": 0.0,
+        "prototype_freshness_weight": 0.0
+      }
+    }
+  ]
+}

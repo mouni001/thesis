@@ -1,0 +1,18 @@
+[INFO] Using T1=500 (B=250 from S1, t=250 from S2)
+[INFO] dims: S1=24, S2=25
+[INFO] eval_window=75, detector=adwin, seed=17
+[INFO] protocol=old3s_feature_evolution
+[INFO] contiguous original stream interval: [34750, 35250), transition=35000
+[INFO] INSECTS uses OLD3S-style feature evolution: S1=obsolete+shared, S2=shared+new.
+[INFO] shared_frac=0.5, feature_seed=1314, scenario=balanced
+[INFO] feature counts: old_only=8, shared=16, new_only=9
+[INFO] known change pattern=incremental_throughout, local exact abrupt points=[], local reference points=[]
+[INFO] Fixed S1-reference maj/min: 1 5 {0: 41, 1: 44, 2: 41, 3: 43, 4: 41, 5: 40}
+[INFO] T1=500, t=250, B=250, num_classes=6
+[INFO] step 200/500
+[INFO] S1->S2 boundary reached, created classifier_2
+[INFO] step 400/500
+[INFO] Predicted class distribution: Counter({2: 109, 4: 97, 1: 86, 3: 79, 0: 74, 5: 55})
+[OK] Adaptive run done.
+[INFO] Sanity baselines disabled for this orchestrated run.
+[OK] Done.

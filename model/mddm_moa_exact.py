@@ -5,9 +5,9 @@ class _MDDMBase:
     def __init__(self, n=100, delta=1e-6):
         self.n = int(n)
         self.delta = float(delta)
-        self.win = []
-        self.pointer = 0
-        self.u_max = 0.0
+        self.win = [] # sliding window f recent correctness bits
+        self.pointer = 0 # how many items are in the window
+        self.u_max = 0.0 # best weighted accuracy seen so far
         self.is_change_detected = False
         self.is_initialized = False
 
@@ -38,7 +38,7 @@ class _MDDMBase:
         if self.pointer == self.n:
             u = self._u_weighted()
             self.u_max = u if self.u_max < u else self.u_max
-            drift = (self.u_max - u) > self.eps
+            drift = (self.u_max - u) > self.eps #best past performance - current performance > threshold
 
         self.is_change_detected = drift
         return drift
@@ -47,6 +47,7 @@ class _MDDMBase:
 class MDDM_G_Exact(_MDDMBase):
     """
     MOA-style MDDM_G geometric scheme.
+    ratio, ratio^2, ratio^3, ...
     """
 
     def __init__(self, n=100, ratio=1.01, delta=1e-6):
@@ -85,6 +86,7 @@ class MDDM_G_Exact(_MDDMBase):
 class MDDM_A_Exact(_MDDMBase):
     """
     MOA-style MDDM_A arithmetic scheme.
+    1, 1+d, 1+2d, 1+3d, ...
     """
 
     def __init__(self, n=100, difference=0.01, delta=1e-6):
@@ -118,6 +120,7 @@ class MDDM_A_Exact(_MDDMBase):
 class MDDM_E_Exact(_MDDMBase):
     """
     MOA-style MDDM_E Euler scheme.
+    1, e^λ, e^(2λ), e^(3λ), ...
     """
 
     def __init__(self, n=100, lambd=0.01, delta=1e-6):

@@ -1,0 +1,83 @@
+{
+  "suite": "pilot_core_v1",
+  "created_at": "2026-08-11T13:14:28-0400",
+  "git_revision": "62d61658fac3048a66d190ba9558043208fad40d",
+  "python": "3.13.12 | packaged by conda-forge | (main, Feb  5 2026, 06:11:05) [Clang 19.1.7 ]",
+  "platform": "macOS-26.5-arm64-arm-64bit-Mach-O",
+  "config_source": "/Users/nihadzitouni/Desktop/thesis/experiments/configs/pilot_core.json",
+  "config": {
+    "name": "pilot_core_v1",
+    "seeds": [
+      17
+    ],
+    "base_args": {
+      "DataName": "insects",
+      "insects_csv": "data/INSECTS_abrupt_balanced.csv",
+      "feature_protocol": "feature_evolution",
+      "feature_scenario": "balanced",
+      "split_index": 14352,
+      "T1": 500,
+      "t": 200,
+      "eval_window": 100,
+      "detector_type": "adwin"
+    },
+    "experiments": [
+      {
+        "name": "full_model",
+        "args": {}
+      },
+      {
+        "name": "no_transfer",
+        "args": {
+          "use_transfer_mapper": 0
+        }
+      },
+      {
+        "name": "no_history",
+        "args": {
+          "use_historical_knowledge": 0
+        }
+      },
+      {
+        "name": "no_prototypes",
+        "args": {
+          "use_prototype_memory": 0
+        }
+      },
+      {
+        "name": "fixed_fusion",
+        "args": {
+          "fusion_mode": "fixed"
+        }
+      },
+      {
+        "name": "single_adaptive",
+        "args": {
+          "use_historical_knowledge": 0,
+          "use_prototype_memory": 0,
+          "fusion_mode": "fixed",
+          "enable_historical_expert": 0,
+          "enable_prototype_expert": 0
+        }
+      },
+      {
+        "name": "without_historical_expert",
+        "args": {
+          "enable_historical_expert": 0
+        }
+      },
+      {
+        "name": "without_adaptive_expert",
+        "args": {
+          "enable_adaptive_expert": 0
+        }
+      },
+      {
+        "name": "without_prototype_expert",
+        "args": {
+          "enable_prototype_expert": 0
+        }
+      }
+    ]
+  }
+}

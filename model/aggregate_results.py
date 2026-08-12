@@ -1,5 +1,8 @@
 # aggregate_results.py
 import os, glob, csv, numpy as np
+from paths import DATA_DIR, data_path
+
+
 def last_k_mean(a, k_frac=0.05):
     a = np.asarray(a, float)
     if len(a)==0: return float('nan')
@@ -8,7 +11,7 @@ def last_k_mean(a, k_frac=0.05):
     return float(np.nanmean(tail))
 
 rows = []
-files = glob.glob('./data/parameter_insects__*__*/metrics/all_metrics.npz')
+files = glob.glob(os.path.join(DATA_DIR, 'parameter_insects__*__*/metrics/all_metrics.npz'))
 for fp in files:
     run_dir = os.path.normpath(os.path.dirname(os.path.dirname(fp)))  # .../<run>/
     run_name = os.path.basename(run_dir)                              # parameter_insects__VAR__DET
@@ -30,8 +33,8 @@ for fp in files:
     })
 
 # write summary
-os.makedirs('./data', exist_ok=True)
-summary_csv = './data/insects_ablation_summary.csv'
+os.makedirs(DATA_DIR, exist_ok=True)
+summary_csv = data_path('insects_ablation_summary.csv')
 fieldnames = list(rows[0].keys()) if rows else []
 with open(summary_csv, 'w', newline='', encoding='utf-8') as f:
     w = csv.DictWriter(f, fieldnames=fieldnames); w.writeheader(); w.writerows(rows)
@@ -52,7 +55,7 @@ for v, rs in by_variant.items():
     ))
     if rs_sorted: best.append(rs_sorted[0])
 
-best_csv = './data/insects_ablation_best_per_variant.csv'
+best_csv = data_path('insects_ablation_best_per_variant.csv')
 if best:
     with open(best_csv, 'w', newline='', encoding='utf-8') as f:
         w = csv.DictWriter(f, fieldnames=fieldnames); w.writeheader(); w.writerows(best)

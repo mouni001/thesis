@@ -1,0 +1,6 @@
+prototype_rep_weight=1.0
+prototype_drift_weight=0.5
+prototype_minority_weight=0.5
+prototype_uncertainty_weight=0.35
+prototype_obsolescence_weight=1.0
+prototype_freshness_weight=1.0

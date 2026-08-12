@@ -2,6 +2,7 @@
 import argparse
 import os
 import random
+import re
 import torch
 import torch.nn as nn
 import numpy as np
@@ -13,9 +14,11 @@ from loaddatasets import loadmagic, loadinsects
 from mlp import MLP
 from model import OLD3S_Shallow
 from paths import data_path
+from stream_annotations import get_stream_annotation
 
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+PROTOCOL_REVISION = "thesis_protocol_2026-08-11_v7"
 
 
 def set_global_seed(seed: int):
@@ -25,6 +28,25 @@ def set_global_seed(seed: int):
     torch.manual_seed(seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
+
+
+def safe_run_tag(value: str) -> str:
+    """Return a filesystem-safe experiment tag without path traversal."""
+    tag = re.sub(r"[^A-Za-z0-9_.-]+", "_", str(value).strip())
+    return tag.strip("._-")
+
+
+def safe_output_name(value: str) -> str:
+    """Validate a relative output path beneath model/data."""
+    raw = str(value).strip().replace("\\", "/")
+    if not raw:
+        return ""
+    if raw.startswith("/"):
+        raise ValueError("output_name must be relative to model/data")
+    parts = raw.split("/")
+    if any(part in {"", ".", ".."} or safe_run_tag(part) != part for part in parts):
+        raise ValueError("output_name contains an unsafe path component")
+    return os.path.join(*parts)
 
 
 def filter_insects_pair(x, y, class_a: int, class_b: int):
@@ -47,19 +69,36 @@ def build_eval_stream(x_S1, y_S1, x_S2, y_S2, B, t):
     return y_stream
 
 
-def set_global_min_maj_from_stream(y_stream):
+def select_contiguous_stream(x_S1, y_S1, x_S2, y_S2, B, t):
+    """Select the B rows before and t rows after the temporal boundary."""
+    B = int(B)
+    t = int(t)
+    if B < 0 or t < 0 or B > len(x_S1) or t > len(x_S2):
+        raise ValueError("Requested contiguous stream segment is out of bounds")
+    s1_x = x_S1[-B:] if B else x_S1[:0]
+    s1_y = y_S1[-B:] if B else y_S1[:0]
+    return s1_x, s1_y, x_S2[:t], y_S2[:t]
+
+
+def set_global_min_maj_from_reference(y_reference):
     """
-    Set fixed global min/maj based on the ACTUAL evaluated stream.
-    This keeps KappaM and min/maj metrics consistent across adaptive + baselines.
+    Fix minority/majority identities from the observed S1 reference period.
+
+    Using the complete evaluated stream would inspect future S2 labels when
+    deciding which class is the minority.  That does not affect model fitting,
+    but it is avoidable evaluation leakage and can silently change the class
+    being reported after the feature transition.
     """
-    y_np = y_stream.detach().cpu().numpy().astype(np.int64)
+    y_np = y_reference.detach().cpu().numpy().astype(np.int64)
+    if y_np.size == 0:
+        raise ValueError("The S1 reference period must contain at least one label")
     classes, counts = np.unique(y_np, return_counts=True)
 
     maj_class = int(classes[np.argmax(counts)])
     min_class = int(classes[np.argmin(counts)])
 
     evaluator_stream.set_global_min_maj(min_class, maj_class)
-    print("[INFO] Global maj/min on evaluated stream:", maj_class, min_class, dict(zip(classes.tolist(), counts.tolist())))
+    print("[INFO] Fixed S1-reference maj/min:", maj_class, min_class, dict(zip(classes.tolist(), counts.tolist())))
 
     return min_class, maj_class
 
@@ -202,7 +241,12 @@ def main():
     parser.add_argument("-beta", type=float, default=0.9)
     parser.add_argument("-eta", type=float, default=-0.001)
     parser.add_argument("-learningrate", type=float, default=1e-3)
-    parser.add_argument("-RecLossFunc", type=str, default="bce")
+    parser.add_argument(
+        "-RecLossFunc",
+        type=str,
+        default="mse",
+        help="Reconstruction loss; MSE is the default for standardized continuous features.",
+    )
     parser.add_argument("-T1", type=int, default=5000)
     parser.add_argument("-t", type=int, default=1000)
     parser.add_argument("-eval_window", type=int, default=500)
@@ -213,14 +257,59 @@ def main():
     parser.add_argument("-mddm_a_difference", type=float, default=0.01)
     parser.add_argument("-mddm_e_lambda", type=float, default=0.01)
     parser.add_argument("-mddm_delta", type=float, default=1e-6)
+    parser.add_argument("-prototype_weight", type=float, default=0.35)
+    parser.add_argument("-prototype_bank_size", type=int, default=256)
+    parser.add_argument("-prototype_k", type=int, default=5)
+    parser.add_argument("-prototype_merge_alpha", type=float, default=0.2)
+    parser.add_argument("-prototype_rep_weight", type=float, default=1.0)
+    parser.add_argument("-prototype_drift_weight", type=float, default=0.75)
+    parser.add_argument("-prototype_minority_weight", type=float, default=0.5)
+    parser.add_argument("-prototype_uncertainty_weight", type=float, default=0.35)
+    parser.add_argument("-prototype_obsolescence_weight", type=float, default=1.0)
+    parser.add_argument("-prototype_freshness_weight", type=float, default=1.0)
+    parser.add_argument("-pset_max", type=int, default=128)
+    parser.add_argument("-pset_drift_k", type=int, default=8)
+    parser.add_argument("-pset_drift_threshold", type=int, default=4)
+    parser.add_argument("-use_transfer_mapper", type=int, choices=[0, 1], default=1)
+    parser.add_argument("-transfer_mapper_mode", choices=["residual", "mlp"], default="residual")
+    parser.add_argument("-use_historical_knowledge", type=int, choices=[0, 1], default=1)
+    parser.add_argument("-use_prototype_memory", type=int, choices=[0, 1], default=1)
+    parser.add_argument("-fusion_mode", choices=["moe", "fixed"], default="moe")
+    parser.add_argument("-enable_historical_expert", type=int, choices=[0, 1], default=1)
+    parser.add_argument("-enable_adaptive_expert", type=int, choices=[0, 1], default=1)
+    parser.add_argument("-enable_prototype_expert", type=int, choices=[0, 1], default=1)
+    parser.add_argument("-router_hidden_dim", type=int, default=32)
+    parser.add_argument("-forgetting_reference_size", type=int, default=128)
+    parser.add_argument("-diagnostic_interval", type=int, default=10)
+    parser.add_argument("-run_tag", type=str, default="")
+    parser.add_argument(
+        "-output_name",
+        type=str,
+        default="",
+        help="Optional safe directory name under model/data for orchestrated runs.",
+    )
+    parser.add_argument("-run_sanity_baselines", type=int, choices=[0, 1], default=1)
     parser.add_argument("-protocol_name", type=str, default="old3s_feature_evolution")
     parser.add_argument("-feature_protocol", type=str, default="feature_evolution")
     parser.add_argument("-shared_frac", type=float, default=0.5)
+    parser.add_argument("-split_ratio", type=float, default=0.8)
+    parser.add_argument(
+        "-split_index",
+        type=int,
+        default=-1,
+        help="Exact original-row S1/S2 boundary; overrides split_ratio when non-negative.",
+    )
     parser.add_argument("-feature_seed", type=int, default=1314)
+    parser.add_argument(
+        "-feature_scenario",
+        choices=["balanced", "s2_expands", "s2_contracts"],
+        default="balanced",
+        help="How non-shared features are divided between S1 and S2.",
+    )
     parser.add_argument(
         "-insects_csv",
         type=str,
-        default=data_path("INSECTS_incremental_abrupt_imbalanced.csv"),
+        default=data_path("INSECTS_incremental_imbalanced.csv"),
     )
     parser.add_argument("-class_a", type=int, default=None, help="INSECTS class id A for one-vs-one binary")
     parser.add_argument("-class_b", type=int, default=None, help="INSECTS class id B for one-vs-one binary")
@@ -235,22 +324,37 @@ def main():
     if dataname == "magic":
         x_S1, y_S1, x_S2, y_S2 = loadmagic()
         path = "parameter_magic"
+        feature_metadata = {
+            "feature_protocol": "random_projection",
+            "feature_scenario": "s2_expands",
+            "dimension1": int(x_S1.shape[1]),
+            "dimension2": int(x_S2.shape[1]),
+        }
     elif dataname == "insects":
-        x_S1, y_S1, x_S2, y_S2 = loadinsects(
+        x_S1, y_S1, x_S2, y_S2, feature_metadata = loadinsects(
             args.insects_csv,
-            split_ratio=0.8,
+            split_ratio=args.split_ratio,
+            split_index=None if args.split_index < 0 else args.split_index,
             feature_protocol=args.feature_protocol,
             shared_frac=args.shared_frac,
             feature_seed=args.feature_seed,
+            feature_scenario=args.feature_scenario,
+            scaler_exclusion_size=max(0, int(args.T1 - args.t)),
+            return_metadata=True,
         )
         csv_stem = os.path.splitext(os.path.basename(args.insects_csv))[0]
         proto_tag = str(args.feature_protocol).strip().lower()
         path = f"parameter_insects__{csv_stem}__{proto_tag}"
+        if args.feature_scenario != "balanced":
+            path = f"{path}__{args.feature_scenario}"
     else:
         raise ValueError(f"Unsupported DataName: {args.DataName}")
 
     if detector_type != "adwin":
         path = f"{path}__{detector_type}"
+    run_tag = safe_run_tag(args.run_tag)
+    if run_tag:
+        path = f"{path}__{run_tag}"
 
     # IMPORTANT: dimension1 is S1 feature dim, dimension2 is S2 feature dim
     dimension1 = int(x_S1.shape[1])
@@ -279,7 +383,15 @@ def main():
         csv_stem = os.path.splitext(os.path.basename(args.insects_csv))[0]
         proto_tag = str(args.feature_protocol).strip().lower()
         path = f"parameter_insects__{csv_stem}__{proto_tag}__pair_{a}vs{b}__{detector_type}"
+        if args.feature_scenario != "balanced":
+            path = f"{path}__{args.feature_scenario}"
+        if run_tag:
+            path = f"{path}__{run_tag}"
         print(f"[INFO] Output path set to: {path}")
+
+    output_name = safe_output_name(args.output_name)
+    if output_name:
+        path = output_name
 
     # Choose T1/t safely relative to available data:
     # S1 available = len(x_S1), S2 available = len(x_S2)
@@ -289,14 +401,55 @@ def main():
     B = min(args.T1 - t, len(x_S1))
     T1 = B + t
 
+    # Preserve stream continuity for temporal datasets. The evaluated S1 segment
+    # must end immediately before the S1/S2 boundary; taking x_S1[:B] would skip
+    # all observations between B and the split index.
+    if dataname == "insects":
+        split_idx = int(feature_metadata["split_index"])
+        if class_pair is None:
+            stream_start_original = split_idx - B
+            stream_end_original = split_idx + t
+            stream_coordinate_system = "original_row"
+        else:
+            # Filtering preserves order but removes rows, so offsets are in the
+            # filtered subsequence and cannot be claimed as original row IDs.
+            stream_start_original = -1
+            stream_end_original = -1
+            stream_coordinate_system = "class_filtered_subsequence"
+        x_S1, y_S1, x_S2, y_S2 = select_contiguous_stream(
+            x_S1, y_S1, x_S2, y_S2, B, t
+        )
+    else:
+        stream_start_original = 0
+        stream_end_original = T1
+        stream_coordinate_system = "dataset_sequence"
+
     print(f"[INFO] Using T1={T1} (B={B} from S1, t={t} from S2)")
     print(f"[INFO] dims: S1={dimension1}, S2={dimension2}")
     print(f"[INFO] eval_window={args.eval_window}, detector={detector_type}, seed={args.seed}")
     print(f"[INFO] protocol={args.protocol_name}")
     if dataname == "insects":
+        if class_pair is None:
+            print(
+                "[INFO] contiguous original stream interval: "
+                f"[{stream_start_original}, {stream_end_original}), "
+                f"transition={feature_metadata['split_index']}"
+            )
+        else:
+            print("[INFO] stream is an order-preserving class-filtered subsequence")
+    if dataname == "insects":
         if str(args.feature_protocol).strip().lower() == "feature_evolution":
             print("[INFO] INSECTS uses OLD3S-style feature evolution: S1=obsolete+shared, S2=shared+new.")
-            print(f"[INFO] shared_frac={args.shared_frac}, feature_seed={args.feature_seed}")
+            print(
+                f"[INFO] shared_frac={args.shared_frac}, feature_seed={args.feature_seed}, "
+                f"scenario={args.feature_scenario}"
+            )
+            print(
+                "[INFO] feature counts: "
+                f"old_only={feature_metadata['old_only_count']}, "
+                f"shared={feature_metadata['shared_count']}, "
+                f"new_only={feature_metadata['new_only_count']}"
+            )
         else:
             print("[WARN] INSECTS is using a same-feature stream split, not true feature evolution/obsolescence.")
 
@@ -304,6 +457,7 @@ def main():
         "dataset": dataname,
         "run_path": path,
         "protocol_name": str(args.protocol_name),
+        "protocol_revision": PROTOCOL_REVISION,
         "autoencoder": args.AutoEncoder,
         "beta": float(args.beta),
         "eta": float(args.eta),
@@ -325,15 +479,92 @@ def main():
         "feature_protocol": str(args.feature_protocol),
         "shared_frac": float(args.shared_frac),
         "feature_seed": int(args.feature_seed),
+        "feature_scenario": str(args.feature_scenario),
+        "feature_metadata": feature_metadata,
+        "split_ratio": float(feature_metadata.get("split_ratio", args.split_ratio)),
+        "split_index_requested": int(args.split_index),
+        "stream_start_original": int(stream_start_original),
+        "transition_original": int(feature_metadata.get("split_index", B)),
+        "stream_end_original": int(stream_end_original),
+        "stream_coordinate_system": stream_coordinate_system,
+        "prototype_weight": float(args.prototype_weight),
+        "prototype_bank_size": int(args.prototype_bank_size),
+        "prototype_k": int(args.prototype_k),
+        "prototype_merge_alpha": float(args.prototype_merge_alpha),
+        "prototype_rep_weight": float(args.prototype_rep_weight),
+        "prototype_drift_weight": float(args.prototype_drift_weight),
+        "prototype_minority_weight": float(args.prototype_minority_weight),
+        "prototype_uncertainty_weight": float(args.prototype_uncertainty_weight),
+        "prototype_obsolescence_weight": float(args.prototype_obsolescence_weight),
+        "prototype_freshness_weight": float(args.prototype_freshness_weight),
+        "pset_max": int(args.pset_max),
+        "pset_drift_k": int(args.pset_drift_k),
+        "pset_drift_threshold": int(args.pset_drift_threshold),
+        "use_transfer_mapper": bool(args.use_transfer_mapper),
+        "transfer_mapper_mode": str(args.transfer_mapper_mode),
+        "use_historical_knowledge": bool(args.use_historical_knowledge),
+        "use_prototype_memory": bool(args.use_prototype_memory),
+        "fusion_mode": str(args.fusion_mode),
+        "enable_historical_expert_requested": bool(args.enable_historical_expert),
+        "enable_historical_expert_effective": bool(args.enable_historical_expert and args.use_historical_knowledge),
+        "enable_adaptive_expert": bool(args.enable_adaptive_expert),
+        "enable_prototype_expert_requested": bool(args.enable_prototype_expert),
+        "enable_prototype_expert_effective": bool(args.enable_prototype_expert and args.use_prototype_memory),
+        "router_hidden_dim": int(args.router_hidden_dim),
+        "forgetting_reference_size": int(args.forgetting_reference_size),
+        "diagnostic_interval": int(args.diagnostic_interval),
+        "run_tag": run_tag,
+        "output_name": output_name,
         "class_pair": class_pair or "",
         "seed": int(args.seed),
     }
+    stream_annotation = (
+        get_stream_annotation(args.insects_csv) if dataname == "insects" else None
+    )
+    if stream_annotation is not None and class_pair is None:
+        abrupt_original = stream_annotation.get("exact_abrupt_points", [])
+        reference_original = stream_annotation.get("reference_points", [])
+        abrupt_local = [
+            int(point - stream_start_original)
+            for point in abrupt_original
+            if stream_start_original <= point < stream_end_original
+        ]
+        reference_local = [
+            int(point - stream_start_original)
+            for point in reference_original
+            if stream_start_original <= point < stream_end_original
+        ]
+    else:
+        abrupt_local = []
+        reference_local = []
+    run_metadata.update(
+        {
+            "stream_annotation": stream_annotation or {},
+            "known_abrupt_points_local": abrupt_local,
+            "reference_change_points_local": reference_local,
+            "feature_transition_local": int(B),
+        }
+    )
+    if stream_annotation is not None:
+        print(
+            f"[INFO] known change pattern={stream_annotation['change_pattern']}, "
+            f"local exact abrupt points={abrupt_local}, "
+            f"local reference points={reference_local}"
+        )
 
     # Build the exact evaluated stream for all runs
     y_stream = build_eval_stream(x_S1, y_S1, x_S2, y_S2, B, t)
 
-    # Set fixed global maj/min from the evaluated stream
-    set_global_min_maj_from_stream(y_stream)
+    # Fix reported minority/majority identities using only labels already seen
+    # before S2 begins. This avoids future-label leakage in metric definitions.
+    min_class, maj_class = set_global_min_maj_from_reference(y_S1[:B])
+    run_metadata.update(
+        {
+            "minority_class": int(min_class),
+            "majority_class": int(maj_class),
+            "minority_reference": "evaluated_s1_segment_only",
+        }
+    )
 
     # Reset rolling evaluator before adaptive run
     evaluator_stream.reset_stream_metrics(window=args.eval_window)
@@ -357,11 +588,40 @@ def main():
         mddm_a_difference=args.mddm_a_difference,
         mddm_e_lambda=args.mddm_e_lambda,
         mddm_delta=args.mddm_delta,
+        prototype_weight=args.prototype_weight,
+        prototype_bank_size=args.prototype_bank_size,
+        prototype_k=args.prototype_k,
+        prototype_merge_alpha=args.prototype_merge_alpha,
+        prototype_rep_weight=args.prototype_rep_weight,
+        prototype_drift_weight=args.prototype_drift_weight,
+        prototype_minority_weight=args.prototype_minority_weight,
+        prototype_uncertainty_weight=args.prototype_uncertainty_weight,
+        prototype_obsolescence_weight=args.prototype_obsolescence_weight,
+        prototype_freshness_weight=args.prototype_freshness_weight,
+        pset_max=args.pset_max,
+        pset_drift_k=args.pset_drift_k,
+        pset_drift_threshold=args.pset_drift_threshold,
+        use_transfer_mapper=bool(args.use_transfer_mapper),
+        transfer_mapper_mode=args.transfer_mapper_mode,
+        use_historical_knowledge=bool(args.use_historical_knowledge),
+        use_prototype_memory=bool(args.use_prototype_memory),
+        fusion_mode=args.fusion_mode,
+        enable_historical_expert=bool(args.enable_historical_expert),
+        enable_adaptive_expert=bool(args.enable_adaptive_expert),
+        enable_prototype_expert=bool(args.enable_prototype_expert),
+        router_hidden_dim=args.router_hidden_dim,
+        forgetting_reference_size=args.forgetting_reference_size,
+        diagnostic_interval=args.diagnostic_interval,
         run_metadata={**run_metadata, "method": "adaptive"},
     )
 
     model.FirstPeriod()
     print("[OK] Adaptive run done.")
+
+    if not args.run_sanity_baselines:
+        print("[INFO] Sanity baselines disabled for this orchestrated run.")
+        print("[OK] Done.")
+        return
 
     # -------------------------
     # No-change baseline
