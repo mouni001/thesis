@@ -1,0 +1,87 @@
+{
+  "name": "final_additional_datasets_v10_tuned_v1",
+  "description": "Five-seed proposed-model and four-baseline comparison on Adult, Arrhythmia, and Car. Proposed-model settings selected by the two-stage development search. Comparison baselines: FESL (adapted), HAT, and ARF. Includes OLD3S shallow (adapted overlap).",
+  "protocol_revision": "thesis_protocol_v10",
+  "reference_experiment": "adult__full_model",
+  "base_args": {
+    "protocol_revision": "thesis_protocol_v10",
+    "feature_protocol": "official_random_projection",
+    "feature_scenario": "s2_expands",
+    "diagnostic_interval": 50
+  },
+  "seeds": [
+    11,
+    17,
+    23,
+    31,
+    43
+  ],
+  "experiment_matrix": {
+    "datasets": [
+      {
+        "name": "adult",
+        "args": {
+          "DataName": "adult",
+          "static_calibration_size": 500,
+          "T1": 32000,
+          "t": 3500,
+          "eval_window": 500
+        }
+      },
+      {
+        "name": "arrhythmia",
+        "args": {
+          "DataName": "arrhythmia",
+          "static_calibration_size": 50,
+          "T1": 400,
+          "t": 100,
+          "eval_window": 50
+        }
+      },
+      {
+        "name": "car",
+        "args": {
+          "DataName": "car",
+          "static_calibration_size": 100,
+          "T1": 1600,
+          "t": 400,
+          "eval_window": 100
+        }
+      }
+    ],
+    "conditions": [
+      {
+        "name": "full_model",
+        "kind": "proposed",
+        "args": {
+          "prototype_k": 9,
+          "prototype_merge_alpha": 0.4,
+          "prototype_bank_size": 128,
+          "alignment_weight": 0.5,
+          "prototype_weight": 0.1
+        }
+      },
+      {
+        "name": "fesl",
+        "kind": "feature_baseline",
+        "method": "fesl"
+      },
+      {
+        "name": "hat",
+        "kind": "river",
+        "method": "hoeffding_adaptive_tree"
+      },
+      {
+        "name": "arf",
+        "kind": "river",
+        "method": "adaptive_random_forest"
+      },
+      {
+        "name": "old3s",
+        "kind": "feature_baseline",
+        "method": "old3s"
+      }
+    ]
+  },
+  "tuning_source": "model/data/thesis_experiments/prototype_tuning_development_v3/selected_parameters.json"
+}

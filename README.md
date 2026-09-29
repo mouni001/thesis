@@ -1,6 +1,3 @@
-Here’s the full updated `README.md` ready to copy and paste:
-
-````markdown
 # Online Deep Learning from Doubly-Streaming Data
 ![Python 3.9](https://img.shields.io/badge/python-3.9-green.svg)
 ![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)
@@ -34,7 +31,7 @@ conda activate OLDS
 # Install core dependencies
 pip install torch torchvision torchaudio
 pip install pandas matplotlib scikit-learn scipy river
-````
+```
 
 ---
 
@@ -75,12 +72,15 @@ python train.py -DataName=magic -AutoEncoder='AE' -beta=0.9 -eta=-0.01 -learning
 
 | Argument        | Description                                                                 |
 | --------------- | --------------------------------------------------------------------------- |
-| `-DataName`     | Dataset to run: `magic`, `adult`, `car`, `arrhythmia`, `thyroid`, `insects` |
+| `-DataName`     | Dataset to run: `magic`, `adult`, `car`, `arrhythmia`, `insects` |
+
 | `-AutoEncoder`  | Autoencoder type: `AE` (shallow) or `VAE` (variational)                     |
 | `-beta`         | Hedge Backpropagation beta parameter                                        |
 | `-eta`          | Learning rate for adaptive weight updates                                   |
 | `-learningrate` | Base learning rate for optimizers                                           |
 | `-RecLossFunc`  | Reconstruction loss: `BCE`, `Smooth`, `KL`, or `MSE`                        |
+
+New-Thyroid historical results are excluded from thesis evidence because its loader selected the wrong target column. See `model/data/thesis_experiments/final_additional_datasets_v10/EXCLUSION_NOTICE.md`.
 
 ---
 
@@ -104,10 +104,6 @@ python train.py -DataName=adult -AutoEncoder='AE' -beta=0.9 -eta=-0.01 -learning
 python train.py -DataName=insects -AutoEncoder='AE' -beta=0.9 -eta=-0.01 -learningrate=0.001 -RecLossFunc=Smooth
 python train.py -DataName insects -insects_csv data/INSECTS_gradual_balanced.csv -RecLossFunc Smooth
 ```
-
-Current note: the INSECTS pipeline in this repo is a sequential same-feature stream split.
-It is useful for online learning, concept drift, and imbalance experiments, but it is not yet
-a true feature-evolution or feature-obsolescence benchmark.
 
 ---
 
@@ -183,3 +179,7 @@ These are saved automatically in `all_metrics.npz`.
 ## License
 
 This project is licensed under the MIT License. See `LICENSE` for details.
+
+## Current comparison baselines
+
+The final comparison configurations retain FESL (adapted) and OLD3S (adapted overlap) for feature evolution, and Hoeffding Adaptive Tree (HAT) and Adaptive Random Forest (ARF) for general online learning. The proposed model uses the selected tuning settings.

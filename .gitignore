@@ -1,24 +1,50 @@
-# Ignore Python cache and virtual environments
+# Python caches and virtual environments
 __pycache__/
 *.py[cod]
-*.so
 *.egg-info/
+.pytest_cache/
+.venv/
+venv/
+env/
 .env
+.env.*
+!.env.example
 
-# Ignore datasets and large files
-*.csv
-*.mat
-*.pth
-*.png
-* .model/data
-# Ignore IDE settings
+# Editor and operating-system files
 .vscode/
 .idea/
-*.zip
-model.zip
-
-
-
-# Ignore OS files
 .DS_Store
 Thumbs.db
+
+# Local datasets and experiment results
+/data/
+/model/data/*
+!/model/data/final_evaluation/
+/model/data/final_evaluation/*
+!/model/data/final_evaluation/build.py
+/model/analysis/data/
+.matplotlib_cache/
+
+# Saved models and runtime logs
+*.pth
+*.pt
+*.pkl
+*.npz
+*.log
+
+# Reference papers and local archives
+/papers/
+/*.pdf
+*.zip
+**/source_snapshot/
+
+# OLD3S baseline dependencies
+/external/*
+!/external/OLD3S_official/
+/external/OLD3S_official/*
+!/external/OLD3S_official/LICENSE
+!/external/OLD3S_official/README.md
+!/external/OLD3S_official/model/
+/external/OLD3S_official/model/*
+!/external/OLD3S_official/model/autoencoder.py
+!/external/OLD3S_official/model/mlp.py

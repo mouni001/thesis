@@ -1,4 +1,0 @@
-[INFO] contiguous original stream interval: [34700, 35200)
-[INFO] known exact abrupt points local=[]
-[INFO] Predicted class distribution: Counter({2: 116, 3: 97, 1: 84, 4: 74, 5: 66, 0: 63})
-[OK] River baseline done: hoeffding_tree

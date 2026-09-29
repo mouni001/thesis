@@ -1,0 +1,249 @@
+{
+  "name": "prototype_tuning_development_v3",
+  "description": "Stage 2 full grid: memory capacity, centroid alignment weight, S1 mixing. Conditional on stage 1 k=9 and merge_alpha=0.4. Development only.",
+  "selection": {
+    "metric": "mean of correct over S2, then mean across seeds",
+    "tie_break": "prefer reference M256 alignment0.2 mixing0.35; otherwise smaller capacity, alignment, mixing in that order",
+    "scope": "INSECTS incremental balanced development window only; sequential tuning, not a full five-parameter grid"
+  },
+  "reference_experiment": "m256_align020_mix035",
+  "base_args": {
+    "DataName": "insects",
+    "insects_csv": "data/INSECTS_incremental_balanced.csv",
+    "feature_protocol": "feature_evolution",
+    "feature_scenario": "balanced",
+    "split_index": 35000,
+    "T1": 1000,
+    "t": 750,
+    "eval_window": 125,
+    "detector_type": "adwin",
+    "RecLossFunc": "mse",
+    "diagnostic_interval": 25,
+    "shared_frac": 0.5,
+    "prototype_k": 9,
+    "prototype_merge_alpha": 0.4
+  },
+  "seeds": [
+    11,
+    17,
+    23
+  ],
+  "experiments": [
+    {
+      "name": "m128_align005_mix010",
+      "args": {
+        "prototype_bank_size": 128,
+        "alignment_weight": 0.05,
+        "prototype_weight": 0.1
+      }
+    },
+    {
+      "name": "m128_align005_mix035",
+      "args": {
+        "prototype_bank_size": 128,
+        "alignment_weight": 0.05,
+        "prototype_weight": 0.35
+      }
+    },
+    {
+      "name": "m128_align005_mix060",
+      "args": {
+        "prototype_bank_size": 128,
+        "alignment_weight": 0.05,
+        "prototype_weight": 0.6
+      }
+    },
+    {
+      "name": "m128_align020_mix010",
+      "args": {
+        "prototype_bank_size": 128,
+        "alignment_weight": 0.2,
+        "prototype_weight": 0.1
+      }
+    },
+    {
+      "name": "m128_align020_mix035",
+      "args": {
+        "prototype_bank_size": 128,
+        "alignment_weight": 0.2,
+        "prototype_weight": 0.35
+      }
+    },
+    {
+      "name": "m128_align020_mix060",
+      "args": {
+        "prototype_bank_size": 128,
+        "alignment_weight": 0.2,
+        "prototype_weight": 0.6
+      }
+    },
+    {
+      "name": "m128_align050_mix010",
+      "args": {
+        "prototype_bank_size": 128,
+        "alignment_weight": 0.5,
+        "prototype_weight": 0.1
+      }
+    },
+    {
+      "name": "m128_align050_mix035",
+      "args": {
+        "prototype_bank_size": 128,
+        "alignment_weight": 0.5,
+        "prototype_weight": 0.35
+      }
+    },
+    {
+      "name": "m128_align050_mix060",
+      "args": {
+        "prototype_bank_size": 128,
+        "alignment_weight": 0.5,
+        "prototype_weight": 0.6
+      }
+    },
+    {
+      "name": "m256_align005_mix010",
+      "args": {
+        "prototype_bank_size": 256,
+        "alignment_weight": 0.05,
+        "prototype_weight": 0.1
+      }
+    },
+    {
+      "name": "m256_align005_mix035",
+      "args": {
+        "prototype_bank_size": 256,
+        "alignment_weight": 0.05,
+        "prototype_weight": 0.35
+      }
+    },
+    {
+      "name": "m256_align005_mix060",
+      "args": {
+        "prototype_bank_size": 256,
+        "alignment_weight": 0.05,
+        "prototype_weight": 0.6
+      }
+    },
+    {
+      "name": "m256_align020_mix010",
+      "args": {
+        "prototype_bank_size": 256,
+        "alignment_weight": 0.2,
+        "prototype_weight": 0.1
+      }
+    },
+    {
+      "name": "m256_align020_mix035",
+      "args": {
+        "prototype_bank_size": 256,
+        "alignment_weight": 0.2,
+        "prototype_weight": 0.35
+      }
+    },
+    {
+      "name": "m256_align020_mix060",
+      "args": {
+        "prototype_bank_size": 256,
+        "alignment_weight": 0.2,
+        "prototype_weight": 0.6
+      }
+    },
+    {
+      "name": "m256_align050_mix010",
+      "args": {
+        "prototype_bank_size": 256,
+        "alignment_weight": 0.5,
+        "prototype_weight": 0.1
+      }
+    },
+    {
+      "name": "m256_align050_mix035",
+      "args": {
+        "prototype_bank_size": 256,
+        "alignment_weight": 0.5,
+        "prototype_weight": 0.35
+      }
+    },
+    {
+      "name": "m256_align050_mix060",
+      "args": {
+        "prototype_bank_size": 256,
+        "alignment_weight": 0.5,
+        "prototype_weight": 0.6
+      }
+    },
+    {
+      "name": "m512_align005_mix010",
+      "args": {
+        "prototype_bank_size": 512,
+        "alignment_weight": 0.05,
+        "prototype_weight": 0.1
+      }
+    },
+    {
+      "name": "m512_align005_mix035",
+      "args": {
+        "prototype_bank_size": 512,
+        "alignment_weight": 0.05,
+        "prototype_weight": 0.35
+      }
+    },
+    {
+      "name": "m512_align005_mix060",
+      "args": {
+        "prototype_bank_size": 512,
+        "alignment_weight": 0.05,
+        "prototype_weight": 0.6
+      }
+    },
+    {
+      "name": "m512_align020_mix010",
+      "args": {
+        "prototype_bank_size": 512,
+        "alignment_weight": 0.2,
+        "prototype_weight": 0.1
+      }
+    },
+    {
+      "name": "m512_align020_mix035",
+      "args": {
+        "prototype_bank_size": 512,
+        "alignment_weight": 0.2,
+        "prototype_weight": 0.35
+      }
+    },
+    {
+      "name": "m512_align020_mix060",
+      "args": {
+        "prototype_bank_size": 512,
+        "alignment_weight": 0.2,
+        "prototype_weight": 0.6
+      }
+    },
+    {
+      "name": "m512_align050_mix010",
+      "args": {
+        "prototype_bank_size": 512,
+        "alignment_weight": 0.5,
+        "prototype_weight": 0.1
+      }
+    },
+    {
+      "name": "m512_align050_mix035",
+      "args": {
+        "prototype_bank_size": 512,
+        "alignment_weight": 0.5,
+        "prototype_weight": 0.35
+      }
+    },
+    {
+      "name": "m512_align050_mix060",
+      "args": {
+        "prototype_bank_size": 512,
+        "alignment_weight": 0.5,
+        "prototype_weight": 0.6
+      }
+    }
+  ]
+}

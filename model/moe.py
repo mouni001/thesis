@@ -100,3 +100,50 @@ class MoEFusion(nn.Module):
         final_logits = torch.sum(alpha.unsqueeze(-1) * expert_logits, dim=1)
 
         return final_logits, alpha
+
+
+def fuse_experts(
+    moe_fusion: MoEFusion,
+    z: torch.Tensor,
+    historical_logits: torch.Tensor,
+    adaptive_logits: torch.Tensor,
+    phase: str,
+    prototype_memory,
+    historical_enabled: bool,
+    adaptive_enabled: bool,
+    prototype_enabled: bool,
+    fusion_mode: str,
+    prototype_z: Optional[torch.Tensor] = None,
+):
+    """Produce prototype logits and fuse the three enabled experts."""
+    prototype_z = z if prototype_z is None else prototype_z
+    prototype_logits = (
+        prototype_memory.expert_logits(prototype_z, phase, adaptive_logits)
+        if prototype_enabled else torch.zeros_like(adaptive_logits)
+    )
+    uncertainty = prototype_memory.uncertainty(prototype_z)
+    uncertainty_feature = torch.full(
+        (z.shape[0], 1), float(uncertainty), dtype=z.dtype, device=z.device
+    )
+    if historical_enabled and adaptive_enabled:
+        historical_probs = torch.softmax(historical_logits.detach(), dim=-1)
+        adaptive_probs = torch.softmax(adaptive_logits.detach(), dim=-1)
+        disagreement = torch.mean(
+            torch.abs(historical_probs - adaptive_probs), dim=1, keepdim=True
+        )
+    else:
+        disagreement = torch.zeros((z.shape[0], 1), dtype=z.dtype, device=z.device)
+    features = torch.cat([z.detach(), uncertainty_feature, disagreement], dim=1)
+    expert_mask = torch.tensor(
+        [historical_enabled, adaptive_enabled, prototype_enabled],
+        dtype=z.dtype,
+        device=z.device,
+    )
+    return moe_fusion(
+        features,
+        historical_logits,
+        adaptive_logits,
+        prototype_logits,
+        expert_mask=expert_mask,
+        fixed_fusion=(fusion_mode == "fixed"),
+    )

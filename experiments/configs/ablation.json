@@ -1,0 +1,173 @@
+{
+  "name": "final_cross_drift_ablation_v9_tuned_v1",
+  "description": "Focused component ablation across all eight INSECTS drift and imbalance variants using five paired seeds. Proposed-model settings selected by the two-stage development search.",
+  "protocol_revision": "thesis_protocol_v9",
+  "reference_experiment": "abrupt_balanced__full_model",
+  "base_args": {
+    "DataName": "insects",
+    "protocol_revision": "thesis_protocol_v9",
+    "feature_protocol": "feature_evolution",
+    "feature_scenario": "balanced",
+    "T1": 2000,
+    "t": 1500,
+    "eval_window": 250,
+    "diagnostic_interval": 50
+  },
+  "seeds": [
+    11,
+    17,
+    23,
+    31,
+    43
+  ],
+  "experiment_matrix": {
+    "datasets": [
+      {
+        "name": "abrupt_balanced",
+        "args": {
+          "insects_csv": "data/INSECTS_abrupt_balanced.csv",
+          "split_index": 19000
+        }
+      },
+      {
+        "name": "abrupt_imbalanced",
+        "args": {
+          "insects_csv": "data/INSECTS_abrupt_imbalanced.csv",
+          "split_index": 128151
+        }
+      },
+      {
+        "name": "gradual_balanced",
+        "args": {
+          "insects_csv": "data/INSECTS_gradual_balanced.csv",
+          "split_index": 13528
+        }
+      },
+      {
+        "name": "gradual_imbalanced",
+        "args": {
+          "insects_csv": "data/INSECTS_gradual_imbalanced.csv",
+          "split_index": 57659
+        }
+      },
+      {
+        "name": "incremental_abrupt_balanced",
+        "args": {
+          "insects_csv": "data/INSECTS_incremental_abrupt_balanced.csv",
+          "split_index": 26068
+        }
+      },
+      {
+        "name": "incremental_balanced",
+        "args": {
+          "insects_csv": "data/INSECTS_incremental_balanced.csv",
+          "split_index": 45000
+        }
+      },
+      {
+        "name": "incremental_imbalanced",
+        "args": {
+          "insects_csv": "data/INSECTS_incremental_imbalanced.csv",
+          "split_index": 360000
+        }
+      },
+      {
+        "name": "reoccurring_balanced",
+        "args": {
+          "insects_csv": "data/INSECTS_incremental_reoccurring_balanced.csv",
+          "split_index": 26068
+        }
+      }
+    ],
+    "conditions": [
+      {
+        "name": "full_model",
+        "args": {
+          "prototype_k": 9,
+          "prototype_merge_alpha": 0.4,
+          "prototype_bank_size": 128,
+          "alignment_weight": 0.5,
+          "prototype_weight": 0.1
+        }
+      },
+      {
+        "name": "no_transfer_mapper",
+        "args": {
+          "use_transfer_mapper": 0,
+          "prototype_k": 9,
+          "prototype_merge_alpha": 0.4,
+          "prototype_bank_size": 128,
+          "alignment_weight": 0.5,
+          "prototype_weight": 0.1
+        }
+      },
+      {
+        "name": "no_historical_knowledge",
+        "args": {
+          "use_historical_knowledge": 0,
+          "prototype_k": 9,
+          "prototype_merge_alpha": 0.4,
+          "prototype_bank_size": 128,
+          "alignment_weight": 0.5,
+          "prototype_weight": 0.1
+        }
+      },
+      {
+        "name": "no_prototype_memory",
+        "args": {
+          "use_prototype_memory": 0,
+          "prototype_k": 9,
+          "prototype_merge_alpha": 0.4,
+          "prototype_bank_size": 128,
+          "alignment_weight": 0.5,
+          "prototype_weight": 0.1
+        }
+      },
+      {
+        "name": "fixed_fusion",
+        "args": {
+          "fusion_mode": "fixed",
+          "prototype_k": 9,
+          "prototype_merge_alpha": 0.4,
+          "prototype_bank_size": 128,
+          "alignment_weight": 0.5,
+          "prototype_weight": 0.1
+        }
+      },
+      {
+        "name": "no_adaptive_expert",
+        "args": {
+          "enable_adaptive_expert": 0,
+          "prototype_k": 9,
+          "prototype_merge_alpha": 0.4,
+          "prototype_bank_size": 128,
+          "alignment_weight": 0.5,
+          "prototype_weight": 0.1
+        }
+      },
+      {
+        "name": "no_historical_expert",
+        "args": {
+          "prototype_k": 9,
+          "prototype_merge_alpha": 0.4,
+          "prototype_bank_size": 128,
+          "alignment_weight": 0.5,
+          "prototype_weight": 0.1,
+          "enable_historical_expert": 0
+        }
+      },
+      {
+        "name": "no_prototype_expert",
+        "args": {
+          "prototype_k": 9,
+          "prototype_merge_alpha": 0.4,
+          "prototype_bank_size": 128,
+          "alignment_weight": 0.5,
+          "prototype_weight": 0.1,
+          "enable_prototype_expert": 0
+        }
+      }
+    ]
+  },
+  "tuning_source": "model/data/thesis_experiments/prototype_tuning_development_v3/selected_parameters.json"
+}

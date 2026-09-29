@@ -1,13 +1,7 @@
-"""Authoritative change annotations for the local INSECTS benchmark files.
+"""INSECTS dataset sizes and concept-change locations from Souza et al. (2020).
 
-Primary source:
-Souza et al. (2020), "Challenges in Benchmarking Stream Learning Algorithms
-with Real-world Data", Data Mining and Knowledge Discovery 34, 1805–1858.
-https://doi.org/10.1007/s10618-020-00698-5
-
-The paper distinguishes exact abrupt boundaries from streams whose changes are
-gradual or incremental. Reference points in the latter must not be scored as
-instantaneous ground-truth drift alarms.
+Exact abrupt points are used for alarm evaluation. Other reference points mark
+incremental or gradual changes and recurring cycles.
 """
 
 from pathlib import Path
@@ -43,48 +37,48 @@ INSECTS_ANNOTATIONS: Dict[str, dict] = {
         "change_pattern": "incremental_gradual",
         "exact_abrupt_points": [],
         "reference_points": [14028],
-        "annotation_warning": "The reference marks a gradual/incremental change, not an instantaneous alarm target.",
+        "annotation_warning": "Reference point within an incremental-gradual change.",
     },
     "INSECTS_gradual_imbalanced.csv": {
         "instances": 143323,
         "change_pattern": "incremental_gradual",
         "exact_abrupt_points": [],
         "reference_points": [58159],
-        "annotation_warning": "The reference marks a gradual/incremental change, not an instantaneous alarm target.",
+        "annotation_warning": "Reference point within an incremental-gradual change.",
     },
     "INSECTS_incremental_balanced.csv": {
         "instances": 57018,
         "change_pattern": "incremental_throughout",
         "exact_abrupt_points": [],
         "reference_points": [],
-        "annotation_warning": "Incremental evolution occurs throughout the stream.",
+        "annotation_warning": "Incremental changes throughout the stream.",
     },
     "INSECTS_incremental_imbalanced.csv": {
         "instances": 452044,
         "change_pattern": "incremental_throughout",
         "exact_abrupt_points": [],
         "reference_points": [],
-        "annotation_warning": "Incremental evolution occurs throughout the stream.",
+        "annotation_warning": "Incremental changes throughout the stream.",
     },
     "INSECTS_incremental_abrupt_balanced.csv": {
         "instances": 79986,
         "change_pattern": "incremental_with_abrupt_recurrence",
         "exact_abrupt_points": [26568, 53364],
         "reference_points": [26568, 53364],
-        "annotation_warning": "Incremental changes also occur between the exact abrupt recurrence boundaries.",
+        "annotation_warning": "Incremental changes between abrupt cycle resets.",
     },
     "INSECTS_incremental_reoccurring_balanced.csv": {
         "instances": 79986,
         "change_pattern": "incremental_reoccurring",
         "exact_abrupt_points": [],
         "reference_points": [26568, 53364],
-        "annotation_warning": "Cycle boundaries are references, not abrupt ground-truth alarms.",
+        "annotation_warning": "Cycle boundaries without abrupt changes.",
     },
 }
 
 
 def get_stream_annotation(csv_path: str) -> Optional[dict]:
-    """Return a copy of the annotation for a known local dataset."""
+    """Look up a dataset by filename and include its source citation."""
     annotation = INSECTS_ANNOTATIONS.get(Path(csv_path).name)
     if annotation is None:
         return None

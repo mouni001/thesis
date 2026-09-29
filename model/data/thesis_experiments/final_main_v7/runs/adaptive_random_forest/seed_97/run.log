@@ -1,4 +1,0 @@
-[INFO] contiguous original stream interval: [44500, 46000)
-[INFO] known exact abrupt points local=[]
-[INFO] Predicted class distribution: Counter({2: 388, 3: 351, 5: 222, 1: 206, 0: 176, 4: 157})
-[OK] River baseline done: adaptive_random_forest

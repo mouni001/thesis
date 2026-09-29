@@ -11,14 +11,33 @@ import pandas as pd
 import torch
 
 from sklearn import preprocessing
-from sklearn.utils import shuffle
 
 from paths import data_path
+from stream_annotations import get_stream_annotation
 
 
-def _here(*parts: str) -> str:
-    """Return a path relative to this repo folder."""
-    return os.path.join(os.path.dirname(__file__), *parts)
+def _dataset_file(filename: str) -> str:
+    """Resolve a dataset without relying on the official code's machine path."""
+    candidates = [
+        data_path(filename),
+        os.path.abspath(
+            os.path.join(
+                os.path.dirname(__file__),
+                "..",
+                "external",
+                "OLD3S_official",
+                "model",
+                "data",
+                filename,
+            )
+        ),
+    ]
+    for candidate in candidates:
+        if os.path.isfile(candidate):
+            return candidate
+    raise FileNotFoundError(
+        f"Dataset {filename!r} was not found. Checked: {candidates}"
+    )
 
 
 def _resolve_feature_evolution_counts(
@@ -111,36 +130,29 @@ def _apply_feature_evolution(
     return views
 
 
-def loadmagic() -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+def loadmagic(calibration_size: int = 500) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     """MAGIC dataset used in the original OLD³S paper (binary)."""
-    X = pd.read_csv(_here("data", "magic04_X.csv"), header=None).values.astype(np.float32)
-    y = pd.read_csv(_here("data", "magic04_y.csv"), header=None).values.reshape(-1)
+    X = pd.read_csv(_dataset_file("magic04_X.csv"), header=None).values.astype(np.float32)
+    y = pd.read_csv(_dataset_file("magic04_y.csv"), header=None).values.reshape(-1)
 
     # map {-1, +1} -> {0, 1}
     y = np.where(y == -1, 0, 1).astype(np.int64) #because neural networks expect class IDs.
 
-    # standardize
-    X = preprocessing.scale(X).astype(np.float32)
+    # Freeze one deterministic sequence first, then fit preprocessing on the
+    # reserved historical calibration prefix only.  This prevents evaluation
+    # covariates from influencing the scale parameters.
+    permutation = np.random.RandomState(50).permutation(len(X))
+    X, y = X[permutation], y[permutation]
+    calibration_size = min(max(1, int(calibration_size)), len(X))
+    scaler = preprocessing.StandardScaler().fit(X[:calibration_size].astype(np.float64))
+    X = scaler.transform(X.astype(np.float64)).astype(np.float32)
 
-    # feature evolution: project X -> 30 dims for S2
-    rd1 = np.random.RandomState(1314)
-    matrix1 = rd1.random((X.shape[1], 30)).astype(np.float32)
-    X2 = X @ matrix1
- #simulation of ransformed features and different representation (feature evolution)
-    x_S1 = torch.sigmoid(torch.tensor(X, dtype=torch.float32))
-    x_S2 = torch.sigmoid(torch.tensor(X2, dtype=torch.float32))
-    y_S1 = torch.tensor(y, dtype=torch.long)
-    y_S2 = torch.tensor(y, dtype=torch.long)
-
-    # for static datasets we can shuffle (NOT for streaming drift datasets)
-    x_S1, y_S1 = shuffle(x_S1, y_S1, random_state=50)
-    x_S2, y_S2 = shuffle(x_S2, y_S2, random_state=50)
-    return x_S1, y_S1, x_S2, y_S2
+    return _project_paired_views(X, y)
 
 
-def loadadult() -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+def loadadult(calibration_size: int = 500) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     """Adult dataset (binary)."""
-    path = _here("data", "adult.data")
+    path = _dataset_file("adult.data")
     df = pd.read_csv(path, header=None, skipinitialspace=True)
     df.columns = [chr(ord("a") + i) for i in range(df.shape[1])]
 
@@ -154,25 +166,31 @@ def loadadult() -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
     y = preprocessing.LabelEncoder().fit_transform(y_raw).astype(np.int64)
 
     X = df.iloc[:, :-1].values.astype(np.float32)
-    X = preprocessing.scale(X).astype(np.float32)
+    permutation = np.random.RandomState(30).permutation(len(X))
+    X, y = X[permutation], y[permutation]
+    calibration_size = min(max(1, int(calibration_size)), len(X))
+    scaler = preprocessing.StandardScaler().fit(X[:calibration_size].astype(np.float64))
+    X = scaler.transform(X.astype(np.float64)).astype(np.float32)
 
+    return _project_paired_views(X, y)
+
+
+def _project_paired_views(X: np.ndarray, y: np.ndarray):
+    """Create the deterministic OLD3S-style original/projected paired views."""
     rd1 = np.random.RandomState(1314)
     matrix1 = rd1.random((X.shape[1], 30)).astype(np.float32)
     X2 = X @ matrix1
-
-    x_S1 = torch.sigmoid(torch.tensor(X, dtype=torch.float32))
-    x_S2 = torch.sigmoid(torch.tensor(X2, dtype=torch.float32))
-    y_S1 = torch.tensor(y, dtype=torch.long)
-    y_S2 = torch.tensor(y, dtype=torch.long)
-
-    x_S1, y_S1 = shuffle(x_S1, y_S1, random_state=30)
-    x_S2, y_S2 = shuffle(x_S2, y_S2, random_state=30)
-    return x_S1, y_S1, x_S2, y_S2
+    return (
+        torch.sigmoid(torch.tensor(X, dtype=torch.float32)),
+        torch.tensor(y, dtype=torch.long),
+        torch.sigmoid(torch.tensor(X2, dtype=torch.float32)),
+        torch.tensor(y, dtype=torch.long),
+    )
 
 
-def loadcar() -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+def loadcar(calibration_size: int = 100) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     """Car Evaluation (multi-class: 4 classes)."""
-    df = pd.read_csv(_here("data", "car.data"), header=None)
+    df = pd.read_csv(data_path("car.data"), header=None)
     le = preprocessing.LabelEncoder()
 
     # all input columns are categorical
@@ -183,70 +201,51 @@ def loadcar() -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     y = preprocessing.LabelEncoder().fit_transform(df[df.shape[1] - 1].astype(str)).astype(np.int64)
 
     X = df.iloc[:, :-1].values.astype(np.float32)
-    X = preprocessing.scale(X).astype(np.float32)
-
-    rd1 = np.random.RandomState(1314)
-    matrix1 = rd1.random((X.shape[1], 30)).astype(np.float32)
-    X2 = X @ matrix1
-
-    x_S1 = torch.sigmoid(torch.tensor(X, dtype=torch.float32))
-    x_S2 = torch.sigmoid(torch.tensor(X2, dtype=torch.float32))
-    y_S1 = torch.tensor(y, dtype=torch.long)
-    y_S2 = torch.tensor(y, dtype=torch.long)
-
-    x_S1, y_S1 = shuffle(x_S1, y_S1, random_state=30)
-    x_S2, y_S2 = shuffle(x_S2, y_S2, random_state=30)
-    return x_S1, y_S1, x_S2, y_S2
+    permutation = np.random.RandomState(30).permutation(len(X))
+    X, y = X[permutation], y[permutation]
+    calibration_size = min(max(1, int(calibration_size)), len(X))
+    scaler = preprocessing.StandardScaler().fit(X[:calibration_size].astype(np.float64))
+    X = scaler.transform(X.astype(np.float64)).astype(np.float32)
+    return _project_paired_views(X, y)
 
 
-def loadarrhythmia() -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+def loadarrhythmia(calibration_size: int = 50) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     """Arrhythmia (binary in your setup: label==1 -> 0 else 1)."""
-    df = pd.read_csv(_here("data", "arrhythmia.data"), header=None, na_values="?")
-    df = df.dropna()
+    df = pd.read_csv(data_path("arrhythmia.data"), header=None, na_values="?")
 
     X = df.iloc[:, :-1].values.astype(np.float32)
     y_raw = df.iloc[:, -1].values
     y = np.array([0 if int(v) == 1 else 1 for v in y_raw], dtype=np.int64)
 
-    X = preprocessing.scale(X).astype(np.float32)
-    rd1 = np.random.RandomState(1314)
-    matrix1 = rd1.random((X.shape[1], 30)).astype(np.float32)
-    X2 = X @ matrix1
-
-    x_S1 = torch.sigmoid(torch.tensor(X, dtype=torch.float32))
-    x_S2 = torch.sigmoid(torch.tensor(X2, dtype=torch.float32))
-    y_S1 = torch.tensor(y, dtype=torch.long)
-    y_S2 = torch.tensor(y, dtype=torch.long)
-
-    x_S1, y_S1 = shuffle(x_S1, y_S1, random_state=30)
-    x_S2, y_S2 = shuffle(x_S2, y_S2, random_state=30)
-    return x_S1, y_S1, x_S2, y_S2
+    permutation = np.random.RandomState(30).permutation(len(X))
+    X, y = X[permutation], y[permutation]
+    calibration_size = min(max(1, int(calibration_size)), len(X))
+    calibration = X[:calibration_size].astype(np.float64)
+    medians = np.nanmedian(calibration, axis=0)
+    medians = np.where(np.isfinite(medians), medians, 0.0)
+    X = np.where(np.isnan(X), medians, X).astype(np.float32)
+    scaler = preprocessing.StandardScaler().fit(X[:calibration_size].astype(np.float64))
+    X = scaler.transform(X.astype(np.float64)).astype(np.float32)
+    return _project_paired_views(X, y)
 
 
-def loadthyroid() -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-    """New Thyroid (binary in your setup: label==1 -> 0 else 1)."""
-    df = pd.read_csv(_here("data", "new-thyroid.data"), header=None)
+def loadthyroid(calibration_size: int = 25) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Historical New-Thyroid loader; invalid target-column selection. Do not use for thesis evidence."""
+    df = pd.read_csv(data_path("new-thyroid.data"), header=None)
     X = df.iloc[:, :-1].values.astype(np.float32)
     y_raw = df.iloc[:, -1].values
     y = np.array([0 if int(v) == 1 else 1 for v in y_raw], dtype=np.int64)
 
-    X = preprocessing.scale(X).astype(np.float32)
-    rd1 = np.random.RandomState(1314)
-    matrix1 = rd1.random((X.shape[1], 30)).astype(np.float32)
-    X2 = X @ matrix1
-
-    x_S1 = torch.sigmoid(torch.tensor(X, dtype=torch.float32))
-    x_S2 = torch.sigmoid(torch.tensor(X2, dtype=torch.float32))
-    y_S1 = torch.tensor(y, dtype=torch.long)
-    y_S2 = torch.tensor(y, dtype=torch.long)
-
-    x_S1, y_S1 = shuffle(x_S1, y_S1, random_state=30)
-    x_S2, y_S2 = shuffle(x_S2, y_S2, random_state=30)
-    return x_S1, y_S1, x_S2, y_S2
+    permutation = np.random.RandomState(30).permutation(len(X))
+    X, y = X[permutation], y[permutation]
+    calibration_size = min(max(1, int(calibration_size)), len(X))
+    scaler = preprocessing.StandardScaler().fit(X[:calibration_size].astype(np.float64))
+    X = scaler.transform(X.astype(np.float64)).astype(np.float32)
+    return _project_paired_views(X, y)
 
 
 def load_insects_from_csv(
-    csv_path: str,
+    csv_path: Optional[str] = None,
     split_ratio: float = 0.8,
     split_index: Optional[int] = None,
     feature_protocol: str = "feature_evolution",
@@ -265,6 +264,8 @@ def load_insects_from_csv(
     - `feature_evolution`: builds an OLD3S-style split:
       S1 = obsolete + shared features, S2 = shared + new features
     """
+    if csv_path is None:
+        csv_path = data_path("INSECTS_incremental_reoccurring_balanced.csv")
     if not os.path.isfile(csv_path):
         raise FileNotFoundError(f"INSECTS file not found: {csv_path}")
 
@@ -310,15 +311,6 @@ def load_insects_from_csv(
         "new_only_indices": [],
         "s1_indices": list(range(int(X.shape[1]))),
         "s2_indices": list(range(int(X.shape[1]))),
-        "total_instances": int(n),
-        "split_index": int(split_idx),
-        "split_ratio": float(split_idx / n),
-        "scaling_protocol": "standard_scaler_fit_on_historical_prefix_before_evaluated_s1",
-        "scaler_fit_start": 0,
-        "scaler_fit_end_exclusive": int(scaler_fit_end),
-        "scaler_exclusion_size": int(scaler_exclusion_size),
-        "scaler_mean": scaler.mean_.astype(float).tolist(),
-        "scaler_scale": scaler.scale_.astype(float).tolist(),
     }
     if protocol == "feature_evolution":
         X1, X2, protocol_metadata = _apply_feature_evolution(
@@ -329,18 +321,21 @@ def load_insects_from_csv(
             feature_scenario=feature_scenario,
             return_metadata=True,
         )
-        protocol_metadata["feature_protocol"] = protocol
-        protocol_metadata["total_instances"] = int(n)
-        protocol_metadata["split_index"] = int(split_idx)
-        protocol_metadata["split_ratio"] = float(split_idx / n)
-        protocol_metadata["scaling_protocol"] = "standard_scaler_fit_on_historical_prefix_before_evaluated_s1"
-        protocol_metadata["scaler_fit_start"] = 0
-        protocol_metadata["scaler_fit_end_exclusive"] = int(scaler_fit_end)
-        protocol_metadata["scaler_exclusion_size"] = int(scaler_exclusion_size)
-        protocol_metadata["scaler_mean"] = scaler.mean_.astype(float).tolist()
-        protocol_metadata["scaler_scale"] = scaler.scale_.astype(float).tolist()
     elif protocol != "same_features":
         raise ValueError(f"Unsupported feature protocol: {feature_protocol}")
+
+    protocol_metadata.update({
+        "feature_protocol": protocol,
+        "total_instances": int(n),
+        "split_index": int(split_idx),
+        "split_ratio": float(split_idx / n),
+        "scaling_protocol": "standard_scaler_fit_on_historical_prefix_before_evaluated_s1",
+        "scaler_fit_start": 0,
+        "scaler_fit_end_exclusive": int(scaler_fit_end),
+        "scaler_exclusion_size": int(scaler_exclusion_size),
+        "scaler_mean": scaler.mean_.astype(float).tolist(),
+        "scaler_scale": scaler.scale_.astype(float).tolist(),
+    })
 
     x_S1 = torch.tensor(X1, dtype=torch.float32)
     y_S1 = torch.tensor(y1, dtype=torch.long)
@@ -352,28 +347,134 @@ def load_insects_from_csv(
     return tensors
 
 
-def loadinsects(
-    csv_path: Optional[str] = None,
-    split_ratio: float = 0.8,
-    split_index: Optional[int] = None,
-    feature_protocol: str = "feature_evolution",
-    shared_frac: float = 0.5,
-    feature_seed: int = 1314,
-    feature_scenario: str = "balanced",
-    scaler_exclusion_size: int = 0,
-    return_metadata: bool = False,
-):
-    """Convenience wrapper used by some scripts."""
-    if csv_path is None:
-        csv_path = data_path("INSECTS_incremental_reoccurring_balanced.csv")
-    return load_insects_from_csv(
-        csv_path,
-        split_ratio=split_ratio,
-        split_index=split_index,
-        feature_protocol=feature_protocol,
-        shared_frac=shared_frac,
-        feature_seed=feature_seed,
-        feature_scenario=feature_scenario,
-        scaler_exclusion_size=scaler_exclusion_size,
-        return_metadata=return_metadata,
+def select_contiguous_stream(x_S1, y_S1, x_S2, y_S2, B, t):
+    """Select the B rows before and t rows after the temporal boundary."""
+    B = int(B)
+    t = int(t)
+    if B < 0 or t < 0 or B > len(x_S1) or t > len(x_S2):
+        raise ValueError("Requested contiguous stream segment is out of bounds")
+    s1_x = x_S1[-B:] if B else x_S1[:0]
+    s1_y = y_S1[-B:] if B else y_S1[:0]
+    return s1_x, s1_y, x_S2[:t], y_S2[:t]
+
+
+def prepare_training_stream(args):
+    """Load and select evaluation rows, preserving calibration and time coordinates."""
+    dataname = args.DataName.strip().lower()
+    if dataname in {"magic", "adult", "arrhythmia", "car", "new-thyroid", "new_thyroid", "thyroid"}:
+        canonical_name = "new-thyroid" if dataname in {"new-thyroid", "new_thyroid", "thyroid"} else dataname
+        loaders = {
+            "magic": loadmagic,
+            "adult": loadadult,
+            "arrhythmia": loadarrhythmia,
+            "car": loadcar,
+            "new-thyroid": loadthyroid,
+        }
+        x_S1, y_S1, x_S2, y_S2 = loaders[canonical_name](args.static_calibration_size)
+        feature_metadata = {
+            "feature_protocol": "random_projection",
+            "feature_scenario": "s2_expands",
+            "dimension1": int(x_S1.shape[1]),
+            "dimension2": int(x_S2.shape[1]),
+            "paired_views": True,
+            "sequence_protocol": "aligned_static_rows_without_replacement",
+            "scaler_fit_end_exclusive": int(args.static_calibration_size),
+            "scaler_fit_source": "historical_calibration_prefix_only",
+        }
+    elif dataname == "insects":
+        x_S1, y_S1, x_S2, y_S2, feature_metadata = load_insects_from_csv(
+            args.insects_csv,
+            split_ratio=args.split_ratio,
+            split_index=None if args.split_index < 0 else args.split_index,
+            feature_protocol=args.feature_protocol,
+            shared_frac=args.shared_frac,
+            feature_seed=args.feature_seed,
+            feature_scenario=args.feature_scenario,
+            scaler_exclusion_size=max(0, int(args.T1 - args.t)),
+            return_metadata=True,
+        )
+    else:
+        raise ValueError(f"Unsupported DataName: {args.DataName}")
+
+    y_S1 = y_S1.view(-1).long()
+    y_S2 = y_S2.view(-1).long()
+
+    # Bound the requested S1 and S2 lengths by the available observations.
+    t = min(args.t, len(x_S2))
+    B = min(args.T1 - t, len(x_S1))
+    if dataname != "insects":
+        # The tensors are aligned alternative views of the same source rows.
+        # Use disjoint sequential ranges so S2 does not repeat S1 observations.
+        calibration_size = max(1, int(args.static_calibration_size))
+        B = min(B, max(0, len(x_S1) - calibration_size))
+        t = min(t, max(0, len(x_S2) - calibration_size - B))
+    T1 = B + t
+
+    # The evaluated S1 segment ends immediately before the S1/S2 boundary.
+    if dataname == "insects":
+        split_idx = int(feature_metadata["split_index"])
+        stream_start_original = split_idx - B
+        stream_end_original = split_idx + t
+        stream_coordinate_system = "original_row"
+        x_S1, y_S1, x_S2, y_S2 = select_contiguous_stream(
+            x_S1, y_S1, x_S2, y_S2, B, t
+        )
+    else:
+        calibration_size = max(1, int(args.static_calibration_size))
+        stream_start_original = calibration_size
+        stream_end_original = calibration_size + T1
+        stream_coordinate_system = "dataset_sequence"
+        x_S1 = x_S1[calibration_size : calibration_size + B]
+        y_S1 = y_S1[calibration_size : calibration_size + B]
+        x_S2 = x_S2[calibration_size + B : calibration_size + B + t]
+        y_S2 = y_S2[calibration_size + B : calibration_size + B + t]
+
+    stream_annotation = (
+        get_stream_annotation(args.insects_csv) if dataname == "insects" else None
     )
+    local_points = {}
+    for source, target in (
+        ("exact_abrupt_points", "known_abrupt_points_local"),
+        ("reference_points", "reference_change_points_local"),
+    ):
+        local_points[target] = [
+            int(point - stream_start_original)
+            for point in (stream_annotation or {}).get(source, [])
+            if stream_start_original <= point < stream_end_original
+        ]
+    info = {
+        "feature_metadata": feature_metadata,
+        "stream_start_original": int(stream_start_original),
+        "stream_end_original": int(stream_end_original),
+        "stream_coordinate_system": stream_coordinate_system,
+        "transition_original": int(feature_metadata.get("split_index", stream_start_original + B)),
+        "stream_annotation": stream_annotation or {},
+        **local_points,
+        "feature_transition_local": int(B),
+    }
+    return (x_S1, y_S1, x_S2, y_S2), info
+
+
+def transition_location_info(args, stream_start, stream_end, split_index, total_instances):
+    """Validate a declared fractional transition and return its provenance fields."""
+    location = args.transition_location
+    fraction = args.transition_fraction
+    start, end = args.evaluation_region_start, args.evaluation_region_end
+    if location:
+        if location not in {"early", "middle", "late"}:
+            raise ValueError("transition_location must be early, middle or late")
+        if fraction is None or start is None or end is None:
+            raise ValueError("Transition locations require a fraction and evaluation region")
+        if not (0 <= start < end <= total_instances and 0 < fraction < 1):
+            raise ValueError("Invalid transition fraction or evaluation region")
+        expected = start + round(fraction * (end - start))
+        if split_index != expected:
+            raise ValueError("split_index does not match the declared transition fraction")
+        if not (start <= stream_start < split_index < stream_end <= end):
+            raise ValueError("S1/S2 evaluation window does not fit the declared region")
+    return {
+        "transition_location": location,
+        "transition_fraction": fraction,
+        "evaluation_region_start": start,
+        "evaluation_region_end": end,
+    }
