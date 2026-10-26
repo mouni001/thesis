@@ -1,4 +1,3 @@
-# autoencoder.py
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -24,12 +23,11 @@ class AutoEncoder_Shallow(nn.Module):
         self.dec2 = nn.Linear(self.hidden, self.input_dim)
 
     def forward(self, x):
-        # x: [N, input_dim]
         h = F.relu(self.enc1(x))
         z = self.enc2(h)
 
         h2 = F.relu(self.dec1(z))
-        x_logits = self.dec2(h2)  # logits (not sigmoid)
+        x_logits = self.dec2(h2)
         return z, x_logits
 
 

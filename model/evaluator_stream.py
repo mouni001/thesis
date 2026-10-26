@@ -11,7 +11,6 @@ from sklearn.metrics import (
 _GLOBAL_MIN = None
 _GLOBAL_MAJ = None
 
-# Rolling window storage
 _WINDOW = 500
 _y_true = deque(maxlen=_WINDOW)
 _y_pred = deque(maxlen=_WINDOW)
@@ -79,19 +78,18 @@ def update_all(y_true: int, y_proba):
 
     y_true = int(y_true)
     y_pred = int(np.argmax(proba))
-    true_proba = float(proba[y_true]) if 0 <= y_true < proba.size else 0.0 # look at the probs again and make sure its not out of range
-    true_proba = min(max(true_proba, 1e-12), 1.0) # because log(0) breaks numerically go to tiny number instead
+    true_proba = float(proba[y_true]) if 0 <= y_true < proba.size else 0.0
+    true_proba = min(max(true_proba, 1e-12), 1.0)
     inst_loss = float(-np.log(true_proba))
 
     _y_true.append(y_true)
     _y_pred.append(y_pred)
     _proba.append(proba)
-    
-    #convert to numPy array
+
     yt = np.asarray(_y_true, dtype=np.int64)
     yp = np.asarray(_y_pred, dtype=np.int64)
-    P = np.stack(list(_proba), axis=0) #convert to Numpy matrix (#sample,#classes )
-    C = P.shape[1] # number of classes 
+    P = np.stack(list(_proba), axis=0)
+    C = P.shape[1]
 
     out = {}
     out["y_pred"] = y_pred
@@ -104,7 +102,6 @@ def update_all(y_true: int, y_proba):
     except Exception:
         out["kappa"] = float("nan")
 
-    # Majority/minority: GLOBAL (fixed) if provided, else window-based fallback
     if _GLOBAL_MIN is not None and _GLOBAL_MAJ is not None:
         min_class = _GLOBAL_MIN
         maj_class = _GLOBAL_MAJ

@@ -19,9 +19,6 @@ Thumbs.db
 # Local datasets and experiment results
 /data/
 /model/data/*
-!/model/data/final_evaluation/
-/model/data/final_evaluation/*
-!/model/data/final_evaluation/build.py
 /model/analysis/data/
 .matplotlib_cache/
 
@@ -38,6 +35,20 @@ Thumbs.db
 *.zip
 **/source_snapshot/
 
+# Generated thesis typesetting files
+*.tex
+*.bib
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.fdb_latexmk
+*.fls
+*.out
+*.run.xml
+*.synctex.gz
+*.toc
+
 # OLD3S baseline dependencies
 /external/*
 !/external/OLD3S_official/
@@ -48,3 +59,4 @@ Thumbs.db
 /external/OLD3S_official/model/*
 !/external/OLD3S_official/model/autoencoder.py
 !/external/OLD3S_official/model/mlp.py
+!/external/OLD3S_official/model/model.py

@@ -1,4 +1,3 @@
-# moe.py
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -13,19 +12,12 @@ class FeatureDriftRouter(nn.Module):
         self.hidden_dim = int(hidden_dim)
         self.num_experts = int(num_experts)
 
-        # Router network:
-        # input  = feature-drift state for one sample
-        # output = 3 raw scores, one for each expert
-        #          [Historical Expert, Adaptive Expert, Prototype Expert]
         self.model = nn.Sequential(
             nn.Linear(self.input_dim, self.hidden_dim),
             nn.ReLU(),
             nn.Linear(self.hidden_dim, self.num_experts),
         )
-        # Begin from the fixed-fusion baseline. Before the router has observed
-        # any S2 labels there is no evidence for arbitrary expert preferences.
-        # Zero logits produce exactly uniform weights; online training can then
-        # move away from them when the stream supplies evidence.
+        # Zero output logits give uniform initial expert weights.
         nn.init.zeros_(self.model[-1].weight)
         nn.init.zeros_(self.model[-1].bias)
 
@@ -39,11 +31,9 @@ class FeatureDriftRouter(nn.Module):
         """
         logits = self.model(features)
 
-        # Softmax turns raw router scores into a convex combination.
-        # Example: [0.70, 0.20, 0.10] means mostly trust the Historical Expert.
         alpha = F.softmax(logits, dim = -1)
         return alpha
-    
+
 class MoEFusion(nn.Module):
     """
     Combines expert logits using router weights.
@@ -65,8 +55,8 @@ class MoEFusion(nn.Module):
         prototype_logits: torch.Tensor,
         expert_mask: Optional[torch.Tensor] = None,
         fixed_fusion: bool = False,
+        reliability: Optional[torch.Tensor] = None,
     ):
-        # Step 1: router decides how much to trust each expert for this sample.
         alpha = self.router(router_features)
         if expert_mask is not None:
             mask = expert_mask.to(device=alpha.device, dtype=alpha.dtype).view(1, -1)
@@ -80,9 +70,10 @@ class MoEFusion(nn.Module):
                 alpha = alpha * mask
                 alpha = alpha / alpha.sum(dim=-1, keepdim=True).clamp_min(1e-12)
 
-        # Step 2: stack the three expert predictions into one tensor.
-        # Shape changes from three [batch_size, num_classes] tensors to:
-        # [batch_size, 3, num_classes] so every experts prediction is in one class
+        if reliability is not None:
+            alpha = alpha * reliability.to(device=alpha.device, dtype=alpha.dtype)
+            alpha = alpha / alpha.sum(dim=-1, keepdim=True).clamp_min(1e-12)
+
         expert_logits = torch.stack(
         [
             historical_logits,
@@ -92,11 +83,7 @@ class MoEFusion(nn.Module):
         dim=1,
         )
 
-        # expert_logits: [batch_size, 3, num_classes]
 
-        # Step 3: weighted sum across experts.
-        # alpha.unsqueeze(-1): [batch_size, 3, 1]
-        # final_logits: [batch_size, num_classes]
         final_logits = torch.sum(alpha.unsqueeze(-1) * expert_logits, dim=1)
 
         return final_logits, alpha
@@ -114,6 +101,9 @@ def fuse_experts(
     prototype_enabled: bool,
     fusion_mode: str,
     prototype_z: Optional[torch.Tensor] = None,
+    reliability: Optional[torch.Tensor] = None,
+    pretraining_losses: Optional[list] = None,
+    target: Optional[torch.Tensor] = None,
 ):
     """Produce prototype logits and fuse the three enabled experts."""
     prototype_z = z if prototype_z is None else prototype_z
@@ -121,6 +111,14 @@ def fuse_experts(
         prototype_memory.expert_logits(prototype_z, phase, adaptive_logits)
         if prototype_enabled else torch.zeros_like(adaptive_logits)
     )
+    if pretraining_losses is not None:
+        # Capture losses from the actual prediction, before any online training.
+        for enabled, logits in ((historical_enabled, historical_logits),
+                                (prototype_enabled, prototype_logits)):
+            pretraining_losses.append(
+                float(F.cross_entropy(logits.detach(), target.view(-1)).item())
+                if enabled else None
+            )
     uncertainty = prototype_memory.uncertainty(prototype_z)
     uncertainty_feature = torch.full(
         (z.shape[0], 1), float(uncertainty), dtype=z.dtype, device=z.device
@@ -146,4 +144,5 @@ def fuse_experts(
         prototype_logits,
         expert_mask=expert_mask,
         fixed_fusion=(fusion_mode == "fixed"),
+        reliability=reliability,
     )

@@ -12,8 +12,7 @@ import time
 from pathlib import Path
 from typing import Dict, List
 
-# This runner lives under model/experiments after the repository cleanup.
-# Make core-model and analysis modules explicit rather than depending on cwd.
+# Resolve model imports independently of the working directory.
 SCRIPT_DIR = Path(__file__).resolve().parent
 MODEL_DIR = SCRIPT_DIR.parent
 for module_dir in (MODEL_DIR, SCRIPT_DIR):

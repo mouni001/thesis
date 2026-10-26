@@ -1,4 +1,3 @@
-# train.py
 import argparse
 import os
 import random
@@ -129,6 +128,8 @@ def main():
     parser.add_argument("-enable_adaptive_expert", type=int, choices=[0, 1], default=1)
     parser.add_argument("-enable_historical_expert", type=int, choices=[0, 1], default=1)
     parser.add_argument("-enable_prototype_expert", type=int, choices=[0, 1], default=1)
+    parser.add_argument("-use_reliability", type=int, choices=[0, 1], default=0)
+    parser.add_argument("-reliability_beta", type=float, default=0.02)
     parser.add_argument("-router_hidden_dim", type=int, default=32)
     parser.add_argument("-forgetting_reference_size", type=int, default=128)
     parser.add_argument("-diagnostic_interval", type=int, default=10)
@@ -247,6 +248,8 @@ def main():
         "enable_adaptive_expert": bool(args.enable_adaptive_expert),
         "enable_historical_expert": bool(args.enable_historical_expert),
         "enable_prototype_expert": bool(args.enable_prototype_expert),
+        "use_reliability": bool(args.use_reliability),
+        "reliability_beta": float(args.reliability_beta),
         "router_hidden_dim": int(args.router_hidden_dim),
         "forgetting_reference_size": int(args.forgetting_reference_size),
         "diagnostic_interval": int(args.diagnostic_interval),
@@ -259,8 +262,7 @@ def main():
         feature_metadata.get("total_instances", len(x_S1) + len(x_S2))
     ))
 
-    # Fix reported minority/majority identities using only labels already seen
-    # before S2 begins. This avoids future-label leakage in metric definitions.
+    # Fix reported class identities from the evaluated S1 segment.
     min_class, maj_class = set_global_min_maj_from_reference(y_S1[:B])
     run_info.update(
         {
@@ -270,12 +272,8 @@ def main():
         }
     )
 
-    # Reset rolling evaluator before adaptive run
     evaluator_stream.reset_stream_metrics(window=args.eval_window)
 
-    # -------------------------
-    # Adaptive OLD3S run
-    # -------------------------
     model = OLD3S_Shallow(
         x_S1, y_S1,
         x_S2, y_S2,
@@ -317,6 +315,8 @@ def main():
         enable_adaptive_expert=bool(args.enable_adaptive_expert),
         enable_historical_expert=bool(args.enable_historical_expert),
         enable_prototype_expert=bool(args.enable_prototype_expert),
+        use_reliability=bool(args.use_reliability),
+        reliability_beta=args.reliability_beta,
         router_hidden_dim=args.router_hidden_dim,
         forgetting_reference_size=args.forgetting_reference_size,
         diagnostic_interval=args.diagnostic_interval,

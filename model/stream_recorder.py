@@ -136,9 +136,9 @@ class StreamRecorder:
         - Custom MDDM_*_Exact: may return bool
         """
         ret = self.detector.update(value)
-        if isinstance(ret, (bool, np.bool_)): #Did update() directly return a boolean?
-            return bool(ret) # Return that drift result directly.
-        if hasattr(self.detector, "drift_detected"): # Does this detector have an attribute called drift_detected? (ADWIN)
+        if isinstance(ret, (bool, np.bool_)):
+            return bool(ret)
+        if hasattr(self.detector, "drift_detected"):
             return bool(self.detector.drift_detected)
         return False
 
@@ -157,14 +157,10 @@ class StreamRecorder:
         ]
         for c in range(int(self.num_classes)):
             metric_keys += [f"prec_c{c}", f"rec_c{c}", f"f1_c{c}"]
-        # prec_c0, rec_c0, f1_c0
-        # prec_c1, rec_c1, f1_c1
-        # prec_c2, rec_c2, f1_c2
 
         for k in metric_keys:
             self.logs[k].append(float(row.get(k, np.nan)))
 
-        # prefer evaluator's prediction
         if "y_pred" in row:
             y_pred = int(row["y_pred"])
         else:
@@ -181,13 +177,12 @@ class StreamRecorder:
         for key, value in self.prototype_diagnostics.items():
             self.logs[key].append(float(value))
 
-        # drift detector stream
         if self.detector_type in ("mddm_g", "mddm_e", "mddm_a"):
-            correct_bit = int(y_pred == y_true) #(1 = correct, 0 = error)
+            correct_bit = int(y_pred == y_true)
             if self._detector_fired(correct_bit):
-                self.logs["drift"].append(step) # record step where drift was detected
+                self.logs["drift"].append(step)
         else:
-            err_bit = int(y_pred != y_true) # ADWIN, DDM, EDDM, etc. (0 = correct, 1 = error)
+            err_bit = int(y_pred != y_true) # ADWIN receives error indicators; MDDM receives correctness.
             if self._detector_fired(err_bit):
                 self.logs["drift"].append(step)
 
@@ -195,7 +190,7 @@ class StreamRecorder:
         self.probabilities.append(proba.copy())
 
     def record_resources(self, dt: float, inference_dt: float, training_dt: float):
-        self.logs["times"].append(float(dt)) # record elapsed times between iterations
+        self.logs["times"].append(float(dt))
         self.logs["inference_times"].append(float(inference_dt))
         self.logs["training_times"].append(float(training_dt))
         self.logs["rss_bytes"].append(
@@ -206,7 +201,7 @@ class StreamRecorder:
             if self.device.type == "cuda"
             else 0.0
         )
-        self.logs["proto_count"].append(float(len(self.prototype_memory.bank))) # records prototype memory evolves over time (num of prototypes)
+        self.logs["proto_count"].append(float(len(self.prototype_memory.bank)))
         current_phase = "s2" if len(self.logs["times"]) > self.B else "s1"
         if self.prototype_memory.bank:
             ages = [
@@ -279,7 +274,7 @@ class StreamRecorder:
             self.logs["moe_select_prototype"].append(float("nan"))
         if self._use_tracemalloc:
             try:
-                _, peak = self._tracemalloc.get_traced_memory() # record current and peak size of memory
+                _, peak = self._tracemalloc.get_traced_memory()
                 self.logs["mems"].append(float(peak))
             except Exception:
                 self.logs["mems"].append(0.0)
@@ -298,13 +293,12 @@ class StreamRecorder:
         for k in self.logs:
             if k == "drift":
                 continue
-            arrays[k] = np.asarray(self.logs[k], dtype=np.float32) #convert into a numpy array
+            arrays[k] = np.asarray(self.logs[k], dtype=np.float32)
 
-        # align lengths (ignore drift)
         series_keys = [k for k in arrays.keys() if k != "drift"]
-        L = min(len(arrays[k]) for k in series_keys) if series_keys else 0 #find shortest metric avoid errors
+        L = min(len(arrays[k]) for k in series_keys) if series_keys else 0
         for k in series_keys:
-            arrays[k] = arrays[k][:L] # reajust
+            arrays[k] = arrays[k][:L]
 
         save_metric_archive(outdir, arrays, self.run_info)
 
@@ -391,22 +385,22 @@ def compute_acr_outputs(oca_values):
     * The difference is called the regret.
     * ACR is the average of those regrets over time.
     """
-    oca = np.asarray(oca_values, dtype=np.float32) # convert values ti numpy array
+    oca = np.asarray(oca_values, dtype=np.float32)
     if oca.size == 0:
         return np.asarray([], dtype=np.float32), float("nan")
 
-    finite_oca = np.where(np.isfinite(oca), oca, -np.inf) # transforms invalid values to -inf
-    f_star_curve = np.maximum.accumulate(finite_oca) # keeps track of the maximum
+    finite_oca = np.where(np.isfinite(oca), oca, -np.inf)
+    f_star_curve = np.maximum.accumulate(finite_oca)
     regret_curve = f_star_curve - oca
-    regret_curve = np.where(np.isfinite(regret_curve), regret_curve, np.nan) # If any regret value is invalid, replace it with NaN.
+    regret_curve = np.where(np.isfinite(regret_curve), regret_curve, np.nan)
 
-    valid = np.isfinite(regret_curve).astype(np.float32) #Counts how many valid regrets have been seen. ([1,1,0,1] -≥ [1,2,2,3])
+    valid = np.isfinite(regret_curve).astype(np.float32)
     regret_sum = np.cumsum(np.where(np.isfinite(regret_curve), regret_curve, 0.0), dtype=np.float64)
     valid_count = np.cumsum(valid, dtype=np.float64)
     acr_curve = regret_sum / np.maximum(valid_count, 1.0)
     acr_curve[valid_count == 0] = np.nan
 
-    final_acr = float(acr_curve[-1]) if acr_curve.size > 0 else float("nan") #If the ACR curve is not empty, take its last value.
+    final_acr = float(acr_curve[-1]) if acr_curve.size > 0 else float("nan")
     return np.asarray(acr_curve, dtype=np.float32), final_acr
 
 

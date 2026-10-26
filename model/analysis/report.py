@@ -1,12 +1,4 @@
-"""Generate thesis summaries, tables and figures with one command.
-
-Examples:
-    python model/analysis/report.py model/data/thesis_experiments/final_main_v7
-    python model/analysis/report.py SUITE --sections summary --output-dir SUITE
-    python model/analysis/report.py SUITE --sections comparison friedman --exclude-dataset new_thyroid
-
-Default outputs go into SUITE/report, leaving archived thesis evidence untouched.
-"""
+"""Generate summaries, statistical tables, and figures from saved experiment runs."""
 from __future__ import annotations
 
 import argparse

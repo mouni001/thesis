@@ -17,7 +17,7 @@ class PrototypeMemory:
     ):
         self.num_classes = num_classes
         self.device = device
-        self.shared_frac = float(shared_frac) # fration of original features shared between S1 and S2
+        self.shared_frac = float(shared_frac)
         self.enabled = bool(enabled)
         self.bank_size = int(bank_size)
         self.k = int(k)
@@ -37,36 +37,26 @@ class PrototypeMemory:
         self.reset()
 
     def reset(self):
-        self.bank = [] # actual prototype used for prediction
-        self.potential_set = [] # mistakes that may indicate changing regions of latent space
-        self.class_seen_counts = torch.zeros(self.num_classes, device=self.device) # how many sample of each class have been seen
-        self.step = 0 # how many memory updates
+        self.bank = []
+        self.potential_set = []
+        self.class_seen_counts = torch.zeros(self.num_classes, device=self.device)
+        self.step = 0
 
     def _phase_name(self, phase: str) -> str:
         phase = str(phase).strip().lower()
         return "s2" if phase == "s2" else "s1"
 
     def _minority_score(self, y_idx: int) -> float:
-        """
-        relative minority score
-        """
+        """Return smoothed inverse class-frequency relevance."""
         total = float(self.class_seen_counts.sum().item())
         if total <= 0:
             return 0.0
         mean_count = total / max(1, self.num_classes)
         cls_count = float(self.class_seen_counts[y_idx].item())
-        return max(0.0, mean_count / (cls_count + 1.0) - 1.0) #large number = minimum class, small/ 0 = majority class
-    # The +1 prevents division by zero for an unseen class and smooths small counts. 
-    # Subtracting 1 makes the score positive only when the average exceeds that smoothed count. max(0, ...) 
-    # prevents negative scores.
+        return max(0.0, mean_count / (cls_count + 1.0) - 1.0)
 
     def obsolescence_score(self, proto: dict, phase: str) -> float:
-        """
-        The older an S1 prototype becomes in S2, the less we trust it, but we never
-        completely discard it because shared features may still carry useful information.
-        proto : a prototype from your prototype memory.
-        phase : either "s1" or "s2"
-        """
+        """Return the phase-dependent retention factor for a prototype."""
         phase = self._phase_name(phase)
         if phase == "s1":
             return 1.0
@@ -74,13 +64,13 @@ class PrototypeMemory:
         if proto["space"] == "s2":
             return 1.0
 
-        age = max(0, self.step - int(proto["last_step"])) # when was the last time the prototype was last used
-        old_decay = math.exp(-age / 250.0) # expential decay (Recently used prototype → near 1, Very old prototype → near 0.)
+        age = max(0, self.step - int(proto["last_step"]))
+        old_decay = math.exp(-age / 250.0)
         return float(self.shared_frac + (1.0 - self.shared_frac) * old_decay)
 
     def quality(self, proto: dict, phase: str, uncertainty: float = 0.0) -> float:
         obs = self.obsolescence_score(proto, phase)
-        freshness = math.exp(-max(0, self.step - int(proto["last_step"])) / 800.0) # when was the prototype last uselfull (only S2)
+        freshness = math.exp(-max(0, self.step - int(proto["last_step"])) / 800.0)
         rep_norm = float(np.clip((float(proto["rep"]) - 0.05) / (4.0 - 0.05), 0.0, 1.0))
         drift_norm = float(np.clip(float(proto["drift"]) / 3.0, 0.0, 1.0))
         minority_norm = float(np.clip(float(proto["minority"]) / 3.0, 0.0, 1.0))
@@ -100,43 +90,36 @@ class PrototypeMemory:
         ) / total_weight
         obs_factor = float(obs) ** max(0.0, self.obsolescence_weight)
         freshness_factor = float(freshness) ** max(0.0, self.freshness_weight)
-        return max(1e-6, raw) * obs_factor * freshness_factor # why are they importante
+        return max(1e-6, raw) * obs_factor * freshness_factor
 
     def _pairwise_proto_distances(self, z: torch.Tensor):
-        """
-        ditance between a prototype and the rest
-        """
+        """Return prototypes sorted by Euclidean distance from the query."""
         if not self.bank:
             return []
 
         z_flat = z.detach().view(-1)
         out = []
         for idx, proto in enumerate(self.bank):
-            dist = torch.norm(z_flat - proto["vec"]).item() # eucledian distance
+            dist = torch.norm(z_flat - proto["vec"]).item()
             out.append((idx, dist))
         out.sort(key=lambda item: item[1])
         return out
 
     def uncertainty(self, z: torch.Tensor) -> float:
-        """
-        How uncertain is the current region of latent space based on the nearby prototypes?
-        Around this sample z, are the nearest prototypes mostly from one class, or are they mixed across classes?
-        """
+        """Return normalized class entropy among the nearest prototypes."""
         dists = self._pairwise_proto_distances(z)
         if not dists:
             return 0.0
 
         k = min(self.k, len(dists))
-        counts = torch.zeros(self.num_classes, dtype=torch.float32) 
+        counts = torch.zeros(self.num_classes, dtype=torch.float32)
         for idx, _ in dists[:k]:
-            counts[self.bank[idx]["label"]] += 1.0 # count how many of the k nearest prototypes belong to each class
+            counts[self.bank[idx]["label"]] += 1.0
 
-        probs = counts / counts.sum().clamp_min(1.0) # divide by the total number of prototypes
-        nz = probs[probs > 0] # keep only positive probabilities, avoids log(0) in the entropy calculation
+        probs = counts / counts.sum().clamp_min(1.0)
+        nz = probs[probs > 0]
         entropy = float((-(nz * torch.log(nz))).sum().item())
         return entropy / math.log(max(2, self.num_classes))
-        # Low entropy  = nearby prototypes mostly same label = confident region
-        # High entropy = nearby prototypes have mixed labels = uncertain region
 
     def logits(self, z: torch.Tensor, phase: str):
         """Return the prototype expert's class logits for one sample z. """
@@ -155,23 +138,15 @@ class PrototypeMemory:
         for idx, dist in dists[:k]:
             proto = self.bank[idx]
             quality = self.quality(proto, phase, uncertainty=uncertainty)
-            scores[proto["label"]] += float(quality) / (dist + 1e-6) # higher quality and closer to z
-            # take the individual prototype votes and add them to their corresponding class score
+            scores[proto["label"]] += float(quality) / (dist + 1e-6)
 
         if torch.allclose(scores, torch.zeros_like(scores)):
             return None
 
-        # Convert distance/quality evidence into normalized log-probabilities so
-        # the prototype expert has a stable, interpretable logit scale.
-        return torch.log_softmax(torch.log(scores + 1e-6), dim=0).view(1, -1) # log_softmax apply softmax followed by log so it can be normalized to sum to 1
+        return torch.log_softmax(torch.log(scores + 1e-6), dim=0).view(1, -1)
 
     def combine_logits(self, base_logits: torch.Tensor, z: torch.Tensor, phase: str):
-        """
-        Its purpose is to combine two predictions:
-
-        1. The neural network’s prediction (base_logits)
-        2. The prototype memory’s prediction (proto_logits)
-        """
+        """Mix classifier and prototype logits using the Stream 1 weight."""
         proto_logits = self.logits(z, phase)
         if proto_logits is None:
             return base_logits
@@ -279,26 +254,24 @@ class PrototypeMemory:
         return 1.0 + self.minority_weight * minority + self.drift_weight * drift_signal + self.uncertainty_weight * uncertainty
 
     def _potential_drift_signal(self, z: torch.Tensor, y_idx: int) -> float:
-        """
-        Does this new sample z look similar to recent uncertain/potential drift samples with the same label?
-        """
+        """Return local support among stored same-class errors."""
         same_label = [entry for entry in self.potential_set if entry["label"] == y_idx]
         if not same_label:
             return 0.0
 
         z_flat = z.detach().view(-1)
-        dists = sorted(torch.norm(z_flat - entry["vec"]).item() for entry in same_label) # eucliden distance
+        dists = sorted(torch.norm(z_flat - entry["vec"]).item() for entry in same_label)
         k = min(self.pset_drift_k, len(dists))
         close = dists[:k]
         if not close:
             return 0.0
 
-        dynamic_radius = float(np.median(close)) if len(close) > 1 else float(close[0]) # median of the k nearest distances, if only one distance, use that distance
+        dynamic_radius = float(np.median(close)) if len(close) > 1 else float(close[0])
         if dynamic_radius <= 0:
             dynamic_radius = 1e-6
 
-        support = sum(1 for dist in close if dist <= dynamic_radius * 1.25 + 1e-6) # count how many of the k nearest distances are within 1.25 times the dynamic radius
-        return min(1.0, support / max(1, self.pset_drift_threshold)) # max 4 is concidered a drift signal, if less than 4, the drift signal is scaled down.
+        support = sum(1 for dist in close if dist <= dynamic_radius * 1.25 + 1e-6)
+        return min(1.0, support / max(1, self.pset_drift_threshold))
 
     def update(self, z: torch.Tensor, y: torch.Tensor, y_pred: int, phase: str):
         """Learn from one sample, then retain the highest-quality prototypes."""
@@ -312,7 +285,7 @@ class PrototypeMemory:
         self.step += 1
         minority = self._minority_score(y_idx)
 
-        # Record mistakes as evidence of potential drift.
+        # Insert the current error before computing support.
         drift_signal = 0.0
         if y_pred != y_idx:
             self.potential_set.append({
@@ -321,30 +294,27 @@ class PrototypeMemory:
                 "space": phase,
                 "last_step": self.step,
             })
-            if len(self.potential_set) > self.pset_max: # keep the potential set to a maximum size
+            if len(self.potential_set) > self.pset_max:
                 self.potential_set = self.potential_set[-self.pset_max:]
             drift_signal = self._potential_drift_signal(z, y_idx)
 
-        # Find the closest existing prototype of the true class.
         same_idx = None
         for idx, _ in self._pairwise_proto_distances(z):
             if self.bank[idx]["label"] == y_idx:
                 same_idx = idx
                 break
 
-        # Add evidence for a new class or mistake; otherwise refresh its representative.
         if same_idx is None or y_pred != y_idx or drift_signal >= 1.0:
             self.bank.append({
-                "vec": vec.clone(), # where it is in latent space
-                "label": y_idx, # which class it belongs to
-                "rep": 1.0 + 0.25 * minority, # how representative it is of its class (1.0 = typical, 4.0 = very representative, 0.05 = not representative). 
-                # new minority-class prototype starts with a somewhat higher representativeness score
-                "drift": float(drift_signal), # how much it is in a region of latent space that is changing (0.0 = stable, 3.0 = very unstable)
-                "minority": float(minority), # how much it is in a region of latent space that is underrepresented (0.0 = majority, 3.0 = minority)
-                "space": phase, # which stream it was added in (s1 = Stream 1, s2 = Stream 2)
-                "origin_space": phase, # which stream it was added in (s1 = Stream 1, s2 = Stream 2)
-                "last_space": phase, # which stream it was last used in (s1 = Stream 1, s2 = Stream 2)
-                "last_step": self.step, # when it was last used in a prediction
+                "vec": vec.clone(),
+                "label": y_idx,
+                "rep": 1.0 + 0.25 * minority,
+                "drift": float(drift_signal),
+                "minority": float(minority),
+                "space": phase,
+                "origin_space": phase,
+                "last_space": phase,
+                "last_step": self.step,
             })
         else:
             proto = self.bank[same_idx]
@@ -356,8 +326,7 @@ class PrototypeMemory:
             proto["last_space"] = phase
             proto["last_step"] = self.step
 
-        # Recompute neighbors after changing the bank and penalize a conflicting class.
-        # penalize the nearest prototype of a different class to reduce its influence on future predictions.
+        # Recompute neighbours before penalizing a conflicting class.
         dists = self._pairwise_proto_distances(z)
         if dists:
             nearest = self.bank[dists[0][0]]
@@ -365,7 +334,7 @@ class PrototypeMemory:
                 nearest["rep"] = float(np.clip(nearest["rep"] - 0.06, 0.05, 4.0))
                 nearest["drift"] = float(np.clip(nearest["drift"] + drift_signal, 0.0, 3.0))
 
-        # Keep the highest-quality entries while preserving their original order.
+        # Evict low-quality entries without reordering retained prototypes.
         if len(self.bank) > self.bank_size:
             scored = [(self.quality(proto, phase), idx) for idx, proto in enumerate(self.bank)]
             scored.sort(key=lambda item: item[0], reverse=True)

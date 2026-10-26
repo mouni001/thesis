@@ -1,4 +1,3 @@
-# model.py
 import os
 import time
 import copy
@@ -41,6 +40,8 @@ class OLD3S_Shallow:
         alignment_weight: float = 0.2,
         enable_historical_expert: bool = True,
         enable_prototype_expert: bool = True,
+        use_reliability: bool = False,
+        reliability_beta: float = 0.02,
     ):
         """Build the stream model with optional component-specific overrides.
 
@@ -50,18 +51,24 @@ class OLD3S_Shallow:
         """
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
+        self.use_reliability = bool(use_reliability)
+        self.reliability_beta = float(reliability_beta)
+        if not 0 < self.reliability_beta <= 1:
+            raise ValueError("reliability_beta must be in (0, 1]")
+        self.reliability_losses = [None, None]  # historical, prototype
+        self.reliability = torch.ones(3, device=self.device)
         self.lr = float(lr)
         self.alignment_weight = float(alignment_weight)
         if not np.isfinite(self.alignment_weight) or self.alignment_weight < 0:
             raise ValueError("alignment_weight must be finite and non-negative")
-        self.T1 = int(T1) #total number of online steps
-        self.t = int(t) # how many belong to S2
-        self.B = self.T1 - self.t # how many belong to S1
+        self.T1 = int(T1)
+        self.t = int(t)
+        self.B = self.T1 - self.t
         self.path = str(path)
 
-        self.x_S1, self.y_S1 = data_S1, label_S1 # old space
-        self.x_S2, self.y_S2 = data_S2, label_S2 # # new stream
-        self.dimension1, self.dimension2 = int(dimension1), int(dimension2) # feature dimensions
+        self.x_S1, self.y_S1 = data_S1, label_S1
+        self.x_S2, self.y_S2 = data_S2, label_S2
+        self.dimension1, self.dimension2 = int(dimension1), int(dimension2)
         self.use_transfer_mapper = bool(use_transfer_mapper)
         self.use_historical_knowledge = bool(use_historical_knowledge)
         self.fusion_mode = str(fusion_mode).strip().lower()
@@ -84,10 +91,8 @@ class OLD3S_Shallow:
         ):
             raise ValueError("At least one S2 expert must be enabled")
 
-        # Infer number of classes from labels (binary or multi-class).
-        # For INSECTS this should become 6 once labels are encoded to {0..5}.
         try:
-            all_y = torch.cat([self.y_S1.view(-1), self.y_S2.view(-1)]).detach().cpu() # number of classes 
+            all_y = torch.cat([self.y_S1.view(-1), self.y_S2.view(-1)]).detach().cpu()
             if all_y.numel() == 0:
                 raise ValueError("Cannot infer classes from empty labels")
             if int(torch.min(all_y).item()) < 0:
@@ -102,13 +107,8 @@ class OLD3S_Shallow:
         self.reconstruction_loss = ReconstructionLoss(str(RecLossFunc))
         self.hedge = HedgeBackprop(5, b, eta, s, m, self.device, nn.CrossEntropyLoss())
 
-        # encoders
-        #    AutoEncoder 1 learns representations from the original feature space
         self.autoencoder_1 = AutoEncoder_Shallow(self.dimension1, self.dimension2).to(self.device)
-        #     AutoEncoder 2 learns representations from the evolved feature space.
         self.autoencoder_2 = AutoEncoder_Shallow(self.dimension2, self.dimension2).to(self.device)
-        # transfer mapper: aligns the two latent spaces so that classifiers, prototypes, and previously learned knowledge 
-        # remain useful despite the feature change
         self.transfer_mapper = ResidualTransferMapper(self.dimension2).to(self.device)
 
         self.historical_centroids = HistoricalCentroids(
@@ -145,6 +145,8 @@ class OLD3S_Shallow:
         adaptive_logits: torch.Tensor,
         phase: str,
         prototype_z: Optional[torch.Tensor] = None,
+        pretraining_losses: Optional[list] = None,
+        target: Optional[torch.Tensor] = None,
     ):
         return fuse_experts(
             moe_fusion, z, historical_logits, adaptive_logits, phase,
@@ -154,6 +156,9 @@ class OLD3S_Shallow:
             self.enable_prototype_expert,
             self.fusion_mode,
             prototype_z,
+            self.reliability if self.use_reliability else None,
+            pretraining_losses,
+            target,
         )
 
     def _map_to_historical(self, z: torch.Tensor) -> torch.Tensor:
@@ -227,19 +232,17 @@ class OLD3S_Shallow:
             if 0 <= int(point) < self.T1:
                 snapshot_points.setdefault(int(point), []).append(label)
 
-        
+
         y_hat = torch.zeros((1, self.num_classes), device=self.device)
 
         router_input_dim = self.dimension2 + 2
         for i in range(self.T1):
             step_start = time.perf_counter()
 
-            # phase 1
             if i < self.B:
                 x = self.x_S1[i].unsqueeze(0).float().to(self.device)
                 y = self.y_S1[i].long().to(self.device)
 
-                # TEST
                 with torch.no_grad():
                     self.recorder.transfer_diagnostics = {
                         key: np.nan for key in self.recorder.transfer_diagnostics
@@ -255,7 +258,6 @@ class OLD3S_Shallow:
                     }
                     inference_start = time.perf_counter()
                     z, _ = self.autoencoder_1(x)
-                    # Hedge Backprop prediction: combine all MLP heads with self.hedge.alpha.
                     logits = self.hedge.logits(classifier_1, z)
                     logits = self.prototype_memory.combine_logits(logits, z, phase="s1")
                     proba = torch.softmax(logits, dim=-1).squeeze(0).cpu().numpy()
@@ -263,7 +265,6 @@ class OLD3S_Shallow:
                 self.recorder.record_metrics(int(y.item()), proba, i)
                 pred_counter[int(np.argmax(proba))] += 1
 
-                # TRAIN
                 training_start = time.perf_counter()
                 z, x_rec = self.autoencoder_1(x)
                 opt_ae1.zero_grad()
@@ -276,7 +277,6 @@ class OLD3S_Shallow:
                 self.historical_centroids.update(z, y)
                 self.prototype_memory.update(z.detach(), y.detach(), int(torch.argmax(y_hat, dim=1).item()), phase="s1")
 
-            # phase 2
             else:
                 j = i - self.B
                 if j >= len(self.x_S2):
@@ -341,7 +341,6 @@ class OLD3S_Shallow:
                     classifier_1.eval()
                     print("[INFO] S1->S2 boundary reached, created classifier_2")
 
-                # TEST (ensemble) prequential
                 with torch.no_grad():
                     if j > 0 and (
                         j % self.diagnostic_interval == 0 or j == self.t - 1
@@ -374,15 +373,12 @@ class OLD3S_Shallow:
                     inference_start = time.perf_counter()
                     z2, _ = self.autoencoder_2(x)
                     z2_prototype = self._map_to_historical(z2)
-                    # Expert 1: Historical Expert. This is classifier_1 frozen after S1,
-                    # but evaluated on S2 through transfer_mapper so the old knowledge can still be used.
                     if self.use_historical_knowledge:
                         z2_old = z2_prototype
                         logit1 = self.hedge.logits(classifier_1, z2_old, self.hedge.alpha_historical)
                     else:
                         logit1 = torch.zeros((z2.shape[0], self.num_classes), device=self.device)
 
-                    # Expert 2: Adaptive Expert. This is classifier_2 learning from the S2 stream.
                     logit2 = (
                         self.hedge.logits(classifier_2, z2, self.hedge.alpha_adaptive)
                         if self.enable_adaptive_expert
@@ -419,7 +415,7 @@ class OLD3S_Shallow:
                         )
                     self.recorder.transfer_diagnostics = diagnostics
 
-                    # The router weights historical, adaptive, and prototype experts per sample.
+                    pretraining_losses = [] if self.use_reliability else None
                     yhat_test, moe_alpha = self._moe_logits(
                         moe_fusion,
                         z2,
@@ -427,6 +423,8 @@ class OLD3S_Shallow:
                         logit2,
                         phase="s2",
                         prototype_z=z2_prototype,
+                        pretraining_losses=pretraining_losses,
+                        target=y,
                     )
                     self.recorder.prototype_diagnostics = self.prototype_memory.diagnostics(
                         z2_prototype,
@@ -443,7 +441,7 @@ class OLD3S_Shallow:
                 self.recorder.record_metrics(int(y.item()), proba, i)
                 pred_counter[int(np.argmax(proba))] += 1
 
-                # TRAIN new-space classifier and the cross-space transfer branch
+                # Update the adaptive classifier and new-space encoder.
                 training_start = time.perf_counter()
                 opt_ae2.zero_grad()
                 z2, x_rec2 = self.autoencoder_2(x)
@@ -464,7 +462,7 @@ class OLD3S_Shallow:
                 loss_rec2 = self.reconstruction_loss(x_rec2, x)
                 loss_rec2.backward()
                 opt_ae2.step()
-                # Train the mapper on S2 labels through the frozen S1 classifier.
+                # Train the mapper through the frozen historical classifier.
                 if opt_transfer is not None:
                     z2_old = z2_prototype
                     logits_old = self.hedge.logits(classifier_1, z2_old, self.hedge.alpha_historical)
@@ -476,18 +474,15 @@ class OLD3S_Shallow:
                     loss1.backward()
                     opt_transfer.step()
 
-                # Train the MoE router after the experts have produced their logits.
-                # The expert logits are detached so this loss updates only the router.
-                # classifier_2 is still trained by hedge.fit above, and transfer_mapper is trained by loss1.
-                # z2 doesnt need to be detached because of torch.no_grad() below.
+                # Detached expert outputs restrict this loss to the router.
                 with torch.no_grad():
                     if self.use_historical_knowledge:
                         z2_old_eval = self._map_to_historical(z2)
-                        y_hat_1 = self.hedge.logits(classifier_1, z2_old_eval, self.hedge.alpha_historical) # historical expert
+                        y_hat_1 = self.hedge.logits(classifier_1, z2_old_eval, self.hedge.alpha_historical)
                     else:
                         y_hat_1 = torch.zeros((z2.shape[0], self.num_classes), device=self.device)
                     if self.enable_adaptive_expert:
-                        y_hat_2_eval = self.hedge.logits(classifier_2, z2, self.hedge.alpha_adaptive) # adaptive expert
+                        y_hat_2_eval = self.hedge.logits(classifier_2, z2, self.hedge.alpha_adaptive)
                     else:
                         y_hat_2_eval = torch.zeros((z2.shape[0], self.num_classes), device=self.device)
 
@@ -511,17 +506,31 @@ class OLD3S_Shallow:
                     opt_moe.zero_grad()
                     loss_moe.backward()
                     opt_moe.step()
-                self.recorder.router_weights = tuple(moe_alpha.squeeze(0).detach().cpu().tolist()) # only for moninuring purposes
+                self.recorder.router_weights = tuple(moe_alpha.squeeze(0).detach().cpu().tolist())
                 self.prototype_memory.update(
                     z2_prototype.detach(),
                     y.detach(),
                     int(torch.argmax(y_hat, dim=1).item()),
                     phase="s2",
                 )
+                if self.use_reliability:
+                    # Recent-loss expert weighting follows Chernov and Zhdanov,
+                    # arXiv:1005.1918, with historical and prototype attenuation.
+                    # Reliability updates affect subsequent predictions only.
+                    for slot, expert in enumerate((0, 2)):
+                        loss = pretraining_losses[slot]
+                        if loss is None:
+                            continue
+                        previous = self.reliability_losses[slot]
+                        average = loss if previous is None else (
+                            (1 - self.reliability_beta) * previous
+                            + self.reliability_beta * loss
+                        )
+                        self.reliability_losses[slot] = average
+                        self.reliability[expert] = np.exp(-average)
 
-              
 
-            # resources
+
             training_dt = time.perf_counter() - training_start
             dt = time.perf_counter() - step_start
             self.recorder.record_resources(dt, inference_dt, training_dt)

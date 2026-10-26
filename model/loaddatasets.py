@@ -1,6 +1,3 @@
-# loaddatasets.py
-# Dataset loaders used by train.py / model.py
-
 from __future__ import annotations
 
 import os
